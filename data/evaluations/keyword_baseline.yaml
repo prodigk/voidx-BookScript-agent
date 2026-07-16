@@ -1,0 +1,71 @@
+cases:
+  - topic: 타인의 평가와 인정 욕구
+    query: 타인의 평가 인정 욕구
+    expected_books:
+      - label: 사람은 무엇으로 움직이는가
+        source_contains: 사람은 무엇으로 움직이는가.md
+      - label: 프로이트의 의자
+        source_contains: 프로이트의 의자.md
+    needs_review: false
+  - topic: 돈이 행복과 의사결정에 미치는 영향
+    query: 돈 행복 심리
+    expected_books:
+      - label: 돈의 심리학
+        source_contains: 돈의 심리학.md
+    needs_review: false
+  - topic: 방해를 줄이고 깊게 집중하는 법
+    query: 집중 방해 몰입
+    expected_books:
+      - label: Deep Work
+        source_contains: Deep Work.md
+    needs_review: false
+  - topic: 신뢰받는 리더와 조직문화
+    query: 리더 조직 신뢰
+    expected_books:
+      - label: 리더는 마지막에 먹는다
+        source_contains: 리더는 마지막에 먹는다
+      - label: 리더의 조건
+        source_contains: 리더의 조건
+    needs_review: false
+  - topic: 인지과학을 활용한 사용자 경험 디자인
+    query: 사용자 경험 인지 디자인
+    expected_books:
+      - label: 도널드 노먼의 디자인 심리학
+        source_contains: 도널드 노먼의 디자인 심리학
+    needs_review: false
+  - topic: 설득력 있고 명확한 글쓰기
+    query: 글쓰기 생각 설득
+    expected_books:
+      - label: 강원국의 글쓰기
+        source_contains: 강원국의 글쓰기.md
+      - label: 대통령의 글쓰기
+        source_contains: 대통령의 글쓰기.md
+    needs_review: false
+  - topic: 감정은 뇌에서 어떻게 만들어지는가
+    query: 감정 뇌 경험
+    expected_books:
+      - label: 감정은 어떻게 만들어지는가
+        source_contains: 감정은 어떻게 만들어 지는가.md
+    needs_review: false
+  - topic: 고통 속에서 삶의 의미를 발견하는 법
+    query: 고통 삶 의미
+    expected_books:
+      - label: 로고테라피
+        source_contains: 로고테라피 Logotherapy.md
+    needs_review: false
+  - topic: 습관과 작은 행동의 복리 효과
+    query: 습관 행동 반복
+    expected_books:
+      - label: 아주 작은 습관의 힘
+        source_contains: 아주작은 습관의 힘
+      - label: COMPOUND EFFECT
+        source_contains: COMPOUND EFFECT
+    needs_review: false
+  - topic: 인공지능과 가상 기술이 현실을 바꾸는 방식
+    query: 인공지능 가상 현실 기술
+    expected_books:
+      - label: 딥러닝 레볼루션
+        source_contains: 딥러닝 레볼루션.md
+      - label: 가상은 현실이다
+        source_contains: 가상은 현실이다.md
+    needs_review: false

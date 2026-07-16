@@ -1,0 +1,64 @@
+project:
+  language: ko
+  library_path: library
+  output_path: outputs
+  database_path: data/database.sqlite
+  metadata_path: metadata/books.yaml
+  audit_report_path: reports/library_audit.md
+logging:
+  level: INFO
+ingestion:
+  ignored_directories:
+    - outputs
+    - reports
+    - data
+    - metadata
+    - .git
+    - .venv
+chunking:
+  min_chars: 200
+  target_chars: 800
+  max_chars: 1500
+  overlap_chars: 150
+indexing:
+  watch_interval_seconds: 10
+embedding:
+  model: text-embedding-3-small
+  dimensions: 1536
+  batch_size: 100
+  max_retries: 3
+llm:
+  model: gpt-5-mini
+  max_retries: 2
+  max_output_tokens: 4000
+script:
+  characters_per_minute: 320
+  length_tolerance: 0.35
+  max_output_tokens: 10000
+video:
+  primary_renderer: remotion
+  fps: 30
+  width: 1920
+  height: 1080
+  project_path: video
+  audio_filename: narration.mp3
+insights:
+  enabled: true
+  path: insights
+  manifest_path: data/insights/manifest.json
+  default_profile: 잠들기전 교양이
+  max_context_chars: 18000
+  max_documents: 5
+backend:
+  host: 127.0.0.1
+  port: 8000
+  max_concurrent_jobs: 1
+  allowed_origins:
+    - http://localhost:3000
+    - http://127.0.0.1:3000
+book_selection:
+  screening_count: 20
+  candidate_count: 10
+  default_selected_count: 3
+  min_selected_count: 2
+  max_selected_count: 4

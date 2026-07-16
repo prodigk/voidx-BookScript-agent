@@ -1,0 +1,11 @@
+weights:
+  keyword: 0.30
+  semantic: 0.45
+  metadata: 0.15
+  diversity: 0.10
+diversity:
+  enabled: true
+  same_book_penalty: 0.15
+limits:
+  candidate_pool: 100
+  max_chunks_per_book: 5
