@@ -16,7 +16,7 @@ async function proxy(request: NextRequest, context: RouteContext): Promise<Respo
 
   const {path} = await context.params;
   const encodedPath = path.map(encodeURIComponent).join("/");
-  const target = new URL(`/api/${encodedPath}${request.nextUrl.search}`, backendUrl);
+  const target = new URL(`/${encodedPath}${request.nextUrl.search}`, backendUrl);
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
