@@ -21,17 +21,21 @@ Production frontend: <https://voidx-bookscript-agent.vercel.app>
 
 ```text
 Vercel Next.js frontend
-        ↓ 브라우저 API 요청
+        ↓ /api/local
+Vercel server proxy + private token
+        ↓ HTTPS
+ngrok tunnel
+        ↓ token-protected API
 로컬 FastAPI backend
         ↓
 로컬 Markdown · SQLite · 생성 outputs
 ```
 
-Vercel은 공개 frontend만 호스팅한다. Markdown, SQLite, OpenAI API 키와 LLM 호출은 로컬 backend에 남는다.
+Vercel은 공개 frontend와 인증 프록시만 호스팅한다. Markdown, SQLite, OpenAI API 키와 LLM 호출은 로컬 backend에 남는다. ngrok의 API 경로는 서버 전용 토큰이 없으면 401을 반환한다.
 
 ## 남은 핵심 제한
 
-- 배포된 브라우저에서 `localhost`는 방문자 자신의 컴퓨터를 가리키므로, 로컬 FastAPI 연결에는 안전한 별도 네트워크 방식이 필요하다.
+- 로컬 Mac 또는 ngrok 터널이 중단되면 Vercel 연구 기능은 503을 반환한다.
 - 작업 취소·자동 재시도와 검증 이슈 단위의 부분 재작성 UI는 아직 없다.
 - Remotion은 별도 후속 작업으로 유지하며 문장 단위 자막과 외부 영상 자산은 아직 연결하지 않았다.
 - 과거 커리어 주제 실행 산출물은 변경하지 않으며 새 정책은 새 실행부터 적용된다.

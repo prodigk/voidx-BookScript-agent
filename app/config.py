@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+from pydantic.types import SecretStr
 
 
 class ProjectSettings(BaseModel):
@@ -91,6 +92,7 @@ class BackendSettings(BaseModel):
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"],
     )
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
+    api_token: SecretStr | None = None
 
 
 class RetrievalWeights(BaseModel):
@@ -181,6 +183,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         "BACKEND_HOST": (backend_config, "host"),
         "BACKEND_PORT": (backend_config, "port"),
         "BACKEND_MAX_CONCURRENT_JOBS": (backend_config, "max_concurrent_jobs"),
+        "LOCAL_API_TOKEN": (backend_config, "api_token"),
     }
     for env_name, (section, key) in overrides.items():
         if value := os.getenv(env_name):

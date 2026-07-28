@@ -57,7 +57,10 @@ tags: [아들러, 인정 욕구]
 - `BACKEND_PORT` (기본값: `8000`)
 - `BACKEND_MAX_CONCURRENT_JOBS` (기본값: `1`, 동시에 실행할 연구 작업 수)
 - `ALLOWED_ORIGINS` (쉼표로 구분한 허용 frontend origin)
-- `NEXT_PUBLIC_API_BASE_URL` (향후 Next.js에서 사용하는 로컬 API 주소)
+- `LOCAL_API_TOKEN` (터널 연결 시 로컬 FastAPI 요청 검증 토큰)
+- `NEXT_PUBLIC_API_BASE_URL` (브라우저가 사용하는 API 주소, production은 `/api/local`)
+- `LOCAL_BACKEND_URL` (Vercel 서버 프록시가 호출하는 ngrok HTTPS 주소)
+- `LOCAL_BACKEND_TOKEN` (Vercel 서버 전용 로컬 API 토큰, 브라우저 비노출)
 
 경로는 실행 디렉터리를 기준으로 한 상대 경로 또는 절대 경로를 사용할 수 있습니다.
 
@@ -386,13 +389,15 @@ npm audit
 
 ### Vercel 배포와 GitHub 자동 반영
 
-Vercel 프로젝트의 Root Directory는 `frontend`입니다. 프로젝트는 GitHub 저장소의 기본 브랜치와 연결하며, `main`에 푸시된 커밋은 production 배포로 자동 반영합니다. `NEXT_PUBLIC_API_BASE_URL`은 브라우저에서 접근 가능한 백엔드 주소로 설정합니다. 로컬 개발 기본값은 `http://127.0.0.1:8000`입니다.
+Vercel 프로젝트의 Root Directory는 `frontend`입니다. 프로젝트는 GitHub 저장소의 기본 브랜치와 연결하며, `main`에 푸시된 커밋은 production 배포로 자동 반영합니다. 로컬 개발의 `NEXT_PUBLIC_API_BASE_URL`은 `http://127.0.0.1:8000`, production은 서버 프록시 경로 `/api/local`입니다.
 
 - Vercel project: `voidx-bookscript-agent`
 - Production URL: <https://voidx-bookscript-agent.vercel.app>
 - Git production branch: `main`
 - Root Directory: `frontend`
-- Production `NEXT_PUBLIC_API_BASE_URL`: `http://127.0.0.1:8000`
+- Production `NEXT_PUBLIC_API_BASE_URL`: `/api/local`
+- Production `LOCAL_BACKEND_URL`: ngrok 개발 도메인
+- Production `LOCAL_BACKEND_TOKEN`: Vercel sensitive 환경변수
 
 ```bash
 cd frontend
@@ -401,11 +406,17 @@ vercel git connect https://github.com/prodigk/voidx-BookScript-agent.git
 vercel --prod
 ```
 
-Vercel 프론트엔드는 로컬 Markdown이나 SQLite에 직접 접근할 수 없습니다. 로컬 FastAPI가 실행 중이어야 하며, 해당 frontend origin을 백엔드 `ALLOWED_ORIGINS`에 추가해야 합니다. 로컬 API를 공개 인터넷에 노출하는 배포 방식은 아직 지원하지 않습니다.
+Vercel 브라우저는 `/api/local/*`만 호출합니다. Vercel Route Handler가 서버 전용 토큰을 추가해 ngrok HTTPS 터널을 거쳐 로컬 FastAPI로 전달합니다. 토큰이 없는 ngrok의 `/api/*` 요청은 401로 차단되며 Markdown, SQLite와 OpenAI API 키는 계속 로컬에 남습니다.
 
 ```dotenv
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://voidx-bookscript-agent.vercel.app
 ```
+
+현재 Mac에는 다음 로컬 서비스가 등록되어 있습니다.
+
+- `com.voidx.bookscript.tunnel`: ngrok 터널을 로그인 시 자동 시작
+- `com.voidx.bookscript.backend-terminal`: Documents 접근 권한이 있는 Terminal에서 FastAPI를 로그인 시 자동 시작
+- API 토큰: macOS Keychain과 Vercel sensitive 환경변수에만 저장
 
 ## 테스트
 
@@ -461,7 +472,7 @@ uv run pytest
 - 연구 작업은 로컬 단일 프로세스의 FastAPI `BackgroundTasks`로 실행합니다. 서버 종료 후 자동 재개하지 않으며 중단 상태를 명시적으로 기록합니다.
 - 구성안 편집은 제목, 섹션 제목·목적, 중간 섹션 순서만 지원합니다. 근거 안전성을 위해 시간·도서·근거 연결과 도입·결론 위치는 잠겨 있습니다.
 - 검증 이슈와 원본 위치는 UI에서 확인할 수 있지만 문제가 있는 문단만 안전하게 재작성하고 재검증하는 기능은 아직 연결되지 않았습니다.
-- 배포된 브라우저에서 `127.0.0.1` 또는 `localhost` API는 각 방문자의 컴퓨터를 가리킵니다. 실제 연구 기능을 사용하려면 로컬 FastAPI를 안전하게 연결할 별도 방식이 필요합니다.
+- 로컬 Mac이 꺼져 있거나 잠자기·네트워크 단절 상태이면 Vercel 프록시는 503을 반환합니다.
 
 ## UI 방향 옵션
 

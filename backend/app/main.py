@@ -1,6 +1,9 @@
 """FastAPI application factory for the local processing backend."""
 
+from hmac import compare_digest
+
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.phase4 import run_phase4
@@ -54,6 +57,19 @@ def create_app(
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization"],
     )
+
+    @application.middleware("http")
+    async def require_local_api_token(request, call_next):
+        token = resolved.backend.api_token
+        if request.url.path.startswith("/api/") and token is not None:
+            supplied = request.headers.get("x-local-api-token", "")
+            if not compare_digest(supplied, token.get_secret_value()):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "유효한 로컬 API 연결 토큰이 필요합니다."},
+                )
+        return await call_next(request)
+
     application.include_router(router)
     return application
 

@@ -19,6 +19,7 @@ def _successful_runner(settings: Settings, request: TopicRequest) -> Any:
 def _client(
     tmp_path: Path,
     *,
+    api_token: str | None = None,
     research_runner: Any = _successful_runner,
     selection_builder: Any = lambda settings, request: "selection_revision_run",
     narrative_runner: Any = lambda settings, run_id: None,
@@ -79,7 +80,10 @@ def _client(
     settings = Settings(
         project=ProjectSettings(library_path=library, output_path=output, database_path=database),
         embedding=EmbeddingSettings(model="test-model", dimensions=8),
-        backend=BackendSettings(allowed_origins=["http://localhost:3000"]),
+        backend=BackendSettings(
+            allowed_origins=["http://localhost:3000"],
+            api_token=api_token,
+        ),
     )
     return TestClient(create_app(
         settings,
@@ -99,6 +103,18 @@ def test_health_and_library_status(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.json()["book_count"] == 1
     assert response.json()["source_file_count"] == 1
+
+
+def test_local_api_token_protects_api_routes(tmp_path: Path) -> None:
+    client, _, _ = _client(tmp_path, api_token="local-secret")
+
+    assert client.get("/health").status_code == 200
+    assert client.get("/api/library/status").status_code == 401
+    response = client.get(
+        "/api/library/status",
+        headers={"x-local-api-token": "local-secret"},
+    )
+    assert response.status_code == 200
 
 
 def test_lists_runs_and_reads_allowlisted_artifact(tmp_path: Path) -> None:
