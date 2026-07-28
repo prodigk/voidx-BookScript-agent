@@ -9,6 +9,8 @@
 - Phase 8: FastAPI 작업 API와 Next.js 주제 입력·후보 선택·구성안 편집·대본·검증 UI
 - Phase 9: Vercel frontend 배포와 GitHub 기본 브랜치 자동 배포 연결
 
+Production frontend: <https://voidx-bookscript-agent.vercel.app>
+
 ## 현재 콘텐츠 방향
 
 새 연구 실행은 인문학·철학·심리학을 핵심 편집 범위로 사용한다. 일상의 감정과 질문에서 시작해 자기이해, 관계, 감정 조절, 삶의 의미와 일상 성찰로 확장한다.

@@ -388,6 +388,12 @@ npm audit
 
 Vercel 프로젝트의 Root Directory는 `frontend`입니다. 프로젝트는 GitHub 저장소의 기본 브랜치와 연결하며, `main`에 푸시된 커밋은 production 배포로 자동 반영합니다. `NEXT_PUBLIC_API_BASE_URL`은 브라우저에서 접근 가능한 백엔드 주소로 설정합니다. 로컬 개발 기본값은 `http://127.0.0.1:8000`입니다.
 
+- Vercel project: `voidx-bookscript-agent`
+- Production URL: <https://voidx-bookscript-agent.vercel.app>
+- Git production branch: `main`
+- Root Directory: `frontend`
+- Production `NEXT_PUBLIC_API_BASE_URL`: `http://127.0.0.1:8000`
+
 ```bash
 cd frontend
 vercel link
@@ -396,6 +402,10 @@ vercel --prod
 ```
 
 Vercel 프론트엔드는 로컬 Markdown이나 SQLite에 직접 접근할 수 없습니다. 로컬 FastAPI가 실행 중이어야 하며, 해당 frontend origin을 백엔드 `ALLOWED_ORIGINS`에 추가해야 합니다. 로컬 API를 공개 인터넷에 노출하는 배포 방식은 아직 지원하지 않습니다.
+
+```dotenv
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://voidx-bookscript-agent.vercel.app
+```
 
 ## 테스트
 
