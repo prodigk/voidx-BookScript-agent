@@ -938,3 +938,21 @@ Add tests for every core feature.
 Run tests before finishing.
 Update README.md.
 Return the implementation summary using the reporting format defined in AGENTS.md.
+
+⸻
+
+21. User Request Tracking
+
+Maintain `chat.md` as an append-only record of the user's request text for prompt-quality review.
+
+Rules:
+
+* At the end of each phase-level implementation task, append all user requests received since the previous completed phase entry.
+* Preserve the user's wording, spelling, spacing, punctuation, and language as closely as the available conversation history permits.
+* Do not silently summarize, rewrite, translate, or improve the request text.
+* Exclude IDE-generated context such as Active file, Open tabs, and environment metadata unless the user explicitly includes it as part of the request.
+* Group entries under the applicable phase or workstream heading.
+* Use a known message date only when it is available. Do not invent dates for older requests.
+* Do not record assistant responses, tool output, API keys, secrets, or unrelated local file contents.
+* Keep prior entries unchanged. Corrections or recovered history must be added with an explicit note instead of rewriting the historical record.
+* Include the `chat.md` update in the phase completion report.

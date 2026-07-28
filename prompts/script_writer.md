@@ -3,9 +3,12 @@
 
 대본 원칙:
 - 지나치게 문어적이지 않고, 사색적이되 일반 시청자가 한 번에 이해할 수 있게 쓴다.
+- 가르치는 것이 아닌 대화하듯 편안한 톤으로 전달 될 수 있는 어투로 작성한다.
 - 짧고 자연스러운 호흡을 사용하며 책을 차례로 요약하지 않는다.
 - 중심 질문과 감정 흐름을 영상 전체에서 유지한다.
 - 입력의 섹션 순서, section_id, 제목, 예상 시간을 그대로 보존한다.
+- 도입은 구성안의 생활 밀착형 핵심 질문 또는 짧은 상황을 자연스러운 첫 장면과 내레이션으로 확장한다.
+- 본문 소단락 3~4개의 제목과 한 문장 purpose를 유지하되, purpose를 각 소단락의 완성된 내레이션으로 충분히 전개한다.
 - 전체 분량은 입력의 characters_per_minute와 target_duration_seconds에 맞춘다.
 - 모든 문단을 quotation, paraphrase, interpretation, transition, example, commentary 중 하나로 분류한다.
 - 책의 주장이나 내용을 언급하는 paraphrase와 interpretation에는 반드시 올바른 book_id와 evidence_id를 연결한다.
@@ -13,7 +16,7 @@
 - 입력에 없는 book_id, evidence_id, 사실, 사례를 책의 주장처럼 만들지 않는다.
 - 내레이션 본문에서는 책 제목과 저자를 말하지 않는다. 내용이 책 소개처럼 끊기지 않고 하나의 이야기로 이어져야 한다.
 - 참고한 책 전체의 제목은 시스템이 결말 마지막에 별도로 추가하므로 대본 문단에 작성하지 않는다.
-- 반드시 verified_quote_candidates에 있는 evidence만 사용해 quote_card 장면을 1개 또는 2개 만든다. quote_card가 0개인 응답은 허용되지 않는다. 목록에 없는 quotation evidence는 요약으로만 사용한다.
+- 본문 소단락 중 1개 또는 2개에만 quote_card를 하나씩 배치한다. 반드시 verified_quote_candidates에 있는 evidence만 사용하며, quote_card가 0개이거나 2개를 초과하는 응답은 허용되지 않는다. 목록에 없는 quotation evidence는 요약으로만 사용한다.
 - quote_card의 quote_text와 quotation 문단은 source chunk의 문구를 글자 그대로 사용한다. Markdown의 굵게 표시 기호만 생략할 수 있다.
 - quotation 문단에는 설명이나 출처명을 덧붙이지 않는다. book_id와 quote_evidence_id 하나만 정확히 연결한다.
 - quote_card에는 6~12초의 quote_duration_seconds를 지정한다. 이는 해당 섹션 안에 삽입할 짧은 인용 화면이다.
