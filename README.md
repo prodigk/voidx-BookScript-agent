@@ -1,6 +1,6 @@
 # YouTube Book Script Agent
 
-로컬 Markdown 도서 노트를 분석해 근거 기반 한국어 YouTube 리서치와 대본을 만드는 로컬 우선 프로젝트입니다. 현재 Phase 0~7.6 파이프라인과 Phase 8의 FastAPI 연구·구성안·대본·검증 작업 API, Next.js 단계별 검토 UI가 구현되어 있습니다.
+로컬 Markdown 도서 노트를 분석해 근거 기반 한국어 YouTube 리서치와 대본을 만드는 로컬 우선 프로젝트입니다. 인문학·철학·심리학을 핵심 편집 범위로 하며 커리어·생산성·조직관리·성과 중심 관점은 새 실행에서 기본 제외합니다. 현재 Phase 0~7.6 파이프라인과 Phase 8의 FastAPI 연구·구성안·대본·검증 작업 API, Next.js 단계별 검토 UI가 구현되어 있습니다.
 
 ## 요구 사항
 
@@ -201,10 +201,10 @@ uv run python scripts/run_research.py \
   --duration 12 --books 3 --tone "사색적" --audience "일반 성인" \
   --lens "철학" --lens "심리학" \
   --emotional-effect "위로" --emotional-effect "위안" \
-  --exclude-lens "생산성" --exclude-lens "조직관리"
+  --exclude-lens "투자"
 ```
 
-CLI에서는 `uv run python -m app.cli research --topic "주제" --books 3`으로 실행합니다. `--lens`, `--emotional-effect`, `--exclude-lens`는 주제별로 반복 지정할 수 있습니다. 옵션이 있을 때만 검색 후보 20권을 편집 방향과 정서 적합성으로 심사한 뒤 최종 후보 10권을 확정합니다. 처리 순서는 `주제 분석 → 검색어 확장 → 하이브리드 검색 → 책 단위 랭킹 → 편집 적합성 심사 → 근거 큐레이션 → 최종 도서 선택`입니다. 검색된 제한 청크만 Responses API에 전달하며, 허용되지 않은 book ID와 chunk ID는 제거합니다. 근거가 부족하면 `insufficient_evidence`로 종료합니다.
+CLI에서는 `uv run python -m app.cli research --topic "주제" --books 3`으로 실행합니다. `--lens`, `--emotional-effect`, `--exclude-lens`는 주제별로 반복 지정할 수 있습니다. 모든 요청에는 커리어·생산성·조직관리·성과 중심 제외 정책이 적용되며, 검색 후보 20권을 인문·철학·심리학 편집 방향과 정서 적합성으로 심사한 뒤 최종 후보 10권을 확정합니다. 처리 순서는 `주제 분석 → 검색어 확장 → 하이브리드 검색 → 책 단위 랭킹 → 편집 적합성 심사 → 근거 큐레이션 → 최종 도서 선택`입니다. 검색된 제한 청크만 Responses API에 전달하며, 허용되지 않은 book ID와 chunk ID는 제거합니다. 근거가 부족하면 `insufficient_evidence`로 종료합니다.
 
 각 실행은 `outputs/<run-id>/`에 `input.json`, `topic_analysis.json`, `search_results.json`, `candidate_screening.json`, `candidate_books.json`, `evidence.json`, `selected_books.json`, `research.md`로 저장되며 이전 실행을 덮어쓰지 않습니다. 심사 파일에는 포함 여부, 주제·편집·정서 점수와 제외 사유가 기록됩니다.
 
@@ -372,7 +372,7 @@ npm run dev
 
 브라우저에서 `http://localhost:3000`을 엽니다. UI는 라이브러리 상태를 확인하고 주제, 영상 길이, 도서 수, 타겟, 정서적 진입점, 주요 관점, 후반부 확장과 제외 관점을 Phase 4 작업 API로 전달합니다. 작업 상태는 polling하며 완료 후 후보 도서의 검색·주제·편집·정서 점수, 선정 이유와 제안 역할을 표시합니다. 사용자는 2~4권과 내러티브 순서를 확정해 Phase 5 구성안을 생성하고, 제목·중간 섹션 순서·섹션 제목과 목적을 수정한 뒤 Phase 6 대본을 생성할 수 있습니다. 생성된 대본은 내부 출처 표시를 켜고 끌 수 있으며 Phase 7 검증 결과에서 승인 여부, 심각도별 이슈, 문단별 신뢰도와 원본 파일·행 범위를 확인하고 대본·검증 산출물을 내려받을 수 있습니다.
 
-직장인 프리셋은 적용될 값을 먼저 보여주고 명시적으로 적용합니다. 현재 API에는 별도 `expansion_topics` 필드가 없으므로 생산성·동기부여 같은 후반부 확장은 `desired_lenses`에 포함해 Phase 4 검색 방향에 보존합니다.
+인문 탐구 프리셋은 적용될 값을 먼저 보여주고 명시적으로 적용합니다. 인문학·철학·심리학을 중심으로 자기이해, 관계, 감정, 삶의 의미와 일상 성찰을 연결하며 커리어 계열 기본 제외 관점을 함께 표시합니다.
 
 프론트엔드 검증:
 
@@ -384,14 +384,14 @@ npm run build
 npm audit
 ```
 
-### Vercel 배포 준비
+### Vercel 배포와 GitHub 자동 반영
 
-Vercel 프로젝트의 Root Directory를 `frontend`로 지정하고 `NEXT_PUBLIC_API_BASE_URL`을 브라우저에서 접근 가능한 로컬 백엔드 주소로 설정합니다. 로컬 개발 기본값은 `http://127.0.0.1:8000`입니다.
+Vercel 프로젝트의 Root Directory는 `frontend`입니다. 프로젝트는 GitHub 저장소의 기본 브랜치와 연결하며, `main`에 푸시된 커밋은 production 배포로 자동 반영합니다. `NEXT_PUBLIC_API_BASE_URL`은 브라우저에서 접근 가능한 백엔드 주소로 설정합니다. 로컬 개발 기본값은 `http://127.0.0.1:8000`입니다.
 
 ```bash
 cd frontend
-vercel
-# production
+vercel link
+vercel git connect https://github.com/prodigk/voidx-BookScript-agent.git
 vercel --prod
 ```
 
@@ -451,8 +451,8 @@ uv run pytest
 - 연구 작업은 로컬 단일 프로세스의 FastAPI `BackgroundTasks`로 실행합니다. 서버 종료 후 자동 재개하지 않으며 중단 상태를 명시적으로 기록합니다.
 - 구성안 편집은 제목, 섹션 제목·목적, 중간 섹션 순서만 지원합니다. 근거 안전성을 위해 시간·도서·근거 연결과 도입·결론 위치는 잠겨 있습니다.
 - 검증 이슈와 원본 위치는 UI에서 확인할 수 있지만 문제가 있는 문단만 안전하게 재작성하고 재검증하는 기능은 아직 연결되지 않았습니다.
-- Vercel 배포 명령과 환경 변수는 문서화했지만 실제 배포는 아직 수행하지 않았습니다. 배포된 브라우저에서 로컬 API에 접근하려면 별도의 안전한 연결 방식이 필요합니다.
+- 배포된 브라우저에서 `127.0.0.1` 또는 `localhost` API는 각 방문자의 컴퓨터를 가리킵니다. 실제 연구 기능을 사용하려면 로컬 FastAPI를 안전하게 연결할 별도 방식이 필요합니다.
 
 ## UI 방향 옵션
 
-Phase 8 주제 입력 UI에는 타겟 시청자, 정서적 진입점, 주요 관점, 확장 주제, 제외 관점을 포함합니다. 직장인 프리셋은 심리적 위로와 공감으로 시작해 생산성·동기부여로 확장할 수 있어야 합니다. 상세 설계 요구사항은 [타겟 시청자 및 영상 방향 UI 요구사항](docs/target-audience-ui-requirements.md)에 기록되어 있습니다.
+Phase 8 주제 입력 UI에는 타겟 시청자, 정서적 진입점, 주요 관점, 확장 주제, 제외 관점을 포함합니다. 인문 탐구 프리셋은 일상의 질문에서 시작해 인문학·철학·심리학으로 해석하고 자기이해·관계·삶의 의미로 확장합니다. 상세 설계 요구사항은 [타겟 시청자 및 영상 방향 UI 요구사항](docs/target-audience-ui-requirements.md)에 기록되어 있습니다.

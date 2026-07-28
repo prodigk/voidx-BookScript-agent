@@ -75,14 +75,14 @@ Phase 4의 `주제 분석 → 검색어 확장 → 책 랭킹 → 근거 큐레�
 
 ```json
 {
-  "topic": "일이 나를 삼키지 않게 하는 커리어의 태도",
+  "topic": "왜 우리는 타인의 평가를 지나치게 의식하는가",
   "duration_minutes": 12,
   "target_book_count": 3,
   "tone": "사색적",
-  "audience": "직장인",
-  "desired_lenses": ["심리적 위안", "생산성"],
-  "desired_emotional_effects": ["공감", "안도"],
-  "excluded_lenses": []
+  "audience": "인문·철학·심리학에 관심 있는 일반 성인",
+  "desired_lenses": ["인문학", "철학", "심리학"],
+  "desired_emotional_effects": ["공감", "위안", "자기이해"],
+  "excluded_lenses": ["커리어", "생산성", "조직관리", "성과 중심"]
 }
 ```
 

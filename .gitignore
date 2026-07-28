@@ -191,6 +191,7 @@ node_modules/
 .next/
 coverage/
 .playwright-cli/
+.vercel/
 data/*.sqlite*
 data/insights/*.json
 reports/*.md

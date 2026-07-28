@@ -16,6 +16,21 @@ class FakeStructuredProvider:
                 subtopics=["평가", "자존감"], keywords=["평가", "인정", "자존감"],
                 search_queries=["타인의 평가", "인정 욕구"],
             )
+        if output_type is CandidateScreening:
+            context = input_text.split("BOOK ")[1:]
+            return CandidateScreening.model_validate({"candidates": [
+                {
+                    "book_id": block.split(" | ", 1)[0],
+                    "include": True,
+                    "topic_fit_score": 0.9,
+                    "editorial_fit_score": 0.9,
+                    "emotional_fit_score": 0.9,
+                    "perspective": "철학·심리",
+                    "reason": "편집 방향 적합",
+                    "exclusion_reason": None,
+                }
+                for block in context
+            ]})
         if output_type is EvidenceCuration:
             return EvidenceCuration.model_validate({"assessments": [
                 {"book_id": f"book_{i}", "relevance_reason": "직접 관련", "suggested_role": f"역할 {i}",

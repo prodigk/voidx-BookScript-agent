@@ -14,21 +14,21 @@ describe("TopicForm", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("두 글자 이상의 영상 주제");
   });
 
-  it("preserves the worker comfort-to-productivity direction in the API payload", async () => {
+  it("preserves the humanities, philosophy, and psychology direction in the API payload", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(<TopicForm onSubmit={onSubmit} />);
 
-    await user.type(screen.getByLabelText("영상 주제"), "일이 나를 삼키지 않게 하는 태도");
+    await user.type(screen.getByLabelText("영상 주제"), "타인의 시선에서 자유로워지는 태도");
     await user.click(screen.getByRole("button", {name: "프리셋 적용"}));
     await user.click(screen.getByRole("button", {name: "책과 근거 찾기"}));
 
     expect(onSubmit).toHaveBeenCalledOnce();
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      audience: "직장인",
-      desired_emotional_effects: ["심리적 위로", "공감"],
-      desired_lenses: ["심리학", "커리어", "생산성", "동기부여"],
-      excluded_lenses: [],
+      audience: "인문·철학·심리학에 관심 있는 일반 성인",
+      desired_emotional_effects: ["공감", "위안", "자기이해"],
+      desired_lenses: ["인문학", "철학", "심리학", "관계 회복", "삶의 의미", "일상 성찰"],
+      excluded_lenses: ["커리어", "생산성", "조직관리", "성과 중심"],
     }));
   });
 
@@ -44,17 +44,16 @@ describe("TopicForm", () => {
     await user.click(emotions.getByRole("button", {name: "자기이해"}));
 
     const lenses = within(screen.getByRole("group", {name: "주요 관점"}));
-    await user.click(lenses.getByRole("button", {name: /옵션 6개 더 보기/}));
+    await user.click(lenses.getByRole("button", {name: /옵션 4개 더 보기/}));
     await user.click(lenses.getByRole("button", {name: "윤리"}));
 
     const expansions = within(screen.getByRole("group", {name: "후반부 확장"}));
-    await user.click(expansions.getByRole("button", {name: /옵션 6개 더 보기/}));
-    await user.click(expansions.getByRole("button", {name: "습관 설계"}));
+    await user.click(expansions.getByRole("button", {name: "가치 탐색"}));
     await user.click(screen.getByRole("button", {name: "책과 근거 찾기"}));
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       desired_emotional_effects: ["공감", "위안", "자기이해"],
-      desired_lenses: ["철학", "심리학", "윤리", "습관 설계"],
+      desired_lenses: ["인문학", "철학", "심리학", "윤리", "자기이해", "가치 탐색"],
     }));
   });
 });

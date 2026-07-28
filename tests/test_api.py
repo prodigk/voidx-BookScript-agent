@@ -138,9 +138,9 @@ def test_creates_and_completes_research_job(tmp_path: Path) -> None:
 
     client, _, _ = _client(tmp_path, research_runner=runner)
     response = client.post("/api/research-jobs", json={
-        "topic": "일이 나를 삼키지 않게 하는 태도",
-        "audience": "직장인",
-        "desired_lenses": ["심리적 위안", "생산성"],
+        "topic": "타인의 시선에서 자유로워지는 태도",
+        "audience": "일반 성인",
+        "desired_lenses": ["인문학", "심리학", "생산성"],
     })
 
     assert response.status_code == 202
@@ -150,7 +150,9 @@ def test_creates_and_completes_research_job(tmp_path: Path) -> None:
     assert completed.json()["status"] == "succeeded"
     assert completed.json()["stage"] == "research_complete"
     assert completed.json()["run_id"] == "generated_run"
-    assert received[0].audience == "직장인"
+    assert received[0].audience == "일반 성인"
+    assert received[0].desired_lenses == ["인문학", "심리학"]
+    assert received[0].excluded_lenses == ["커리어", "생산성", "조직관리", "성과 중심"]
     assert client.get("/api/jobs").json()["total"] == 1
 
 
