@@ -53,6 +53,34 @@ class InvalidAttributionProvider(FakeScriptProvider):
         return script.model_copy(update={"sections": sections})
 
 
+class RepairingAttributionProvider(InvalidAttributionProvider):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def parse(self, *, stage, instructions, input_text, output_type):
+        self.calls += 1
+        context = json.loads(input_text)
+        assert context["section_evidence_contract"][1] == {
+            "section_id": "s2",
+            "allowed_book_ids": ["book_1"],
+            "required_evidence_ids": ["e_1"],
+        }
+        if self.calls == 1:
+            assert context["validation_feedback"] is None
+            return super().parse(
+                stage=stage, instructions=instructions,
+                input_text=input_text, output_type=output_type,
+            )
+        feedback = context["validation_feedback"]
+        assert feedback["error"] == "Invalid evidence attribution: p_2"
+        assert feedback["invalid_section"]["section_id"] == "s2"
+        assert [item["evidence_id"] for item in feedback["allowed_section_evidence"]] == ["e_1"]
+        return FakeScriptProvider.parse(
+            self, stage=stage, instructions=instructions,
+            input_text=input_text, output_type=output_type,
+        )
+
+
 class InexactQuotationProvider(FakeScriptProvider):
     def parse(self, *, stage, instructions, input_text, output_type):
         script = super().parse(stage=stage, instructions=instructions, input_text=input_text, output_type=output_type)
@@ -168,6 +196,15 @@ def test_generate_script_rejects_invalid_section_attribution(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="Invalid evidence attribution"):
         generate_script(settings, run_id, structured=InvalidAttributionProvider(), source_chunks=chunks)
     assert not (settings.project.output_path / run_id / "script.md").exists()
+
+
+def test_generate_script_retries_with_bounded_attribution_feedback(tmp_path: Path) -> None:
+    settings, run_id, chunks = _write_run(tmp_path)
+    provider = RepairingAttributionProvider()
+    script = generate_script(settings, run_id, structured=provider, source_chunks=chunks)
+    assert provider.calls == 2
+    assert script.sections[1].paragraphs[0].evidence_ids == ["e_1"]
+    assert (settings.project.output_path / run_id / "script.md").is_file()
 
 
 def test_generate_script_repairs_quotation_from_exact_evidence(tmp_path: Path) -> None:

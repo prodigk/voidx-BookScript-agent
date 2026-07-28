@@ -65,6 +65,7 @@ class ScriptSettings(BaseModel):
     characters_per_minute: int = Field(default=320, ge=100, le=1000)
     length_tolerance: float = Field(default=0.35, ge=0.1, le=0.75)
     max_output_tokens: int = Field(default=10000, ge=1000)
+    max_validation_retries: int = Field(default=2, ge=0, le=5)
 
 
 class VideoSettings(BaseModel):
@@ -173,6 +174,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         "EMBEDDING_DIMENSIONS": (embedding_config, "dimensions"),
         "OPENAI_MODEL": (llm_config, "model"),
         "SCRIPT_MAX_OUTPUT_TOKENS": (script_config, "max_output_tokens"),
+        "SCRIPT_MAX_VALIDATION_RETRIES": (script_config, "max_validation_retries"),
         "VIDEO_RENDERER": (video_config, "primary_renderer"),
         "VIDEO_WIDTH": (video_config, "width"),
         "VIDEO_HEIGHT": (video_config, "height"),

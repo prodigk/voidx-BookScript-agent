@@ -35,6 +35,7 @@ script:
   characters_per_minute: 320
   length_tolerance: 0.35
   max_output_tokens: 10000
+  max_validation_retries: 2
 video:
   primary_renderer: remotion
   fps: 30

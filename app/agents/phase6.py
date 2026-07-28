@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 from collections.abc import Sequence
@@ -20,6 +21,8 @@ from app.schemas.narrative import NarrativePlan
 from app.schemas.script import ScriptDocument, ScriptParagraph
 from app.schemas.topic import TopicRequest
 from app.storage.database import connect_database
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _plain_markdown(text: str) -> str:
@@ -270,6 +273,40 @@ def _validate_script(
         raise ValueError(f"Script length {text_length} is outside target range {minimum:.0f}-{maximum:.0f}")
 
 
+def _validation_feedback(
+    error: ValueError,
+    script: ScriptDocument,
+    narrative: NarrativePlan,
+    evidence: Sequence[EvidenceItem],
+) -> dict[str, object]:
+    """Return bounded correction context without weakening evidence validation."""
+    paragraph_id = str(error).rsplit(": ", 1)[-1]
+    invalid_section = next((
+        section for section in script.sections
+        if any(paragraph.paragraph_id == paragraph_id for paragraph in section.paragraphs)
+    ), None)
+    narrative_by_id = {section.section_id: section for section in narrative.sections}
+    narrative_section = narrative_by_id.get(invalid_section.section_id) if invalid_section else None
+    evidence_by_id = {item.evidence_id: item for item in evidence}
+    allowed_evidence = [
+        evidence_by_id[evidence_id].model_dump(mode="json")
+        for evidence_id in (narrative_section.evidence_ids if narrative_section else [])
+        if evidence_id in evidence_by_id
+    ]
+    return {
+        "error": str(error),
+        "instruction": (
+            "전체 ScriptDocument를 다시 생성하되 검증 오류를 수정하라. "
+            "각 섹션은 section_evidence_contract에 지정된 book_id와 evidence_id만 사용하고 "
+            "해당 섹션의 모든 evidence_id를 최소 한 번 사용해야 한다."
+        ),
+        "invalid_section": (
+            invalid_section.model_dump(mode="json") if invalid_section else None
+        ),
+        "allowed_section_evidence": allowed_evidence,
+    }
+
+
 def _render_scripts(
     script: ScriptDocument,
     evidence: Sequence[EvidenceItem],
@@ -396,6 +433,14 @@ def generate_script(
             for item in selected.selected_books
         ],
         "evidence": [evidence_by_id[item].model_dump(mode="json") for item in sorted(required_evidence)],
+        "section_evidence_contract": [
+            {
+                "section_id": section.section_id,
+                "allowed_book_ids": section.book_ids,
+                "required_evidence_ids": section.evidence_ids,
+            }
+            for section in narrative.sections
+        ],
         "verified_quote_candidates": verified_quote_candidates,
         "editorial_strategy": editorial_strategy.model_dump(mode="json") if editorial_strategy else None,
         "source_chunks": source_chunks,
@@ -403,22 +448,45 @@ def generate_script(
     if structured is None:
         llm_settings = settings.llm.model_copy(update={"max_output_tokens": settings.script.max_output_tokens})
         structured = OpenAIStructuredProvider(llm_settings)
-    script = structured.parse(
-        stage="script_writer", instructions=load_prompt("script_writer"),
-        input_text=json.dumps(context, ensure_ascii=False), output_type=ScriptDocument,
-    )
-    if narrative.selected_title:
-        script = script.model_copy(update={"title": narrative.selected_title})
-    script = _repair_quotations(script, evidence, source_chunks)
-    script = _ensure_quote_card(script, narrative, evidence, source_chunks)
-    _validate_script(
-        script, narrative, selected, evidence, source_chunks,
-        characters_per_minute=settings.script.characters_per_minute,
-        length_tolerance=settings.script.length_tolerance,
-    )
-    for paragraph in (item for section in script.sections for item in section.paragraphs):
-        if any(name in paragraph.text for name in restricted_names):
-            raise ValueError(f"Book title/author exposed before final attribution: {paragraph.paragraph_id}")
+    script: ScriptDocument | None = None
+    validation_feedback: dict[str, object] | None = None
+    for attempt in range(settings.script.max_validation_retries + 1):
+        attempt_context = {
+            **context,
+            "validation_feedback": validation_feedback,
+        }
+        script = structured.parse(
+            stage="script_writer", instructions=load_prompt("script_writer"),
+            input_text=json.dumps(attempt_context, ensure_ascii=False), output_type=ScriptDocument,
+        )
+        if narrative.selected_title:
+            script = script.model_copy(update={"title": narrative.selected_title})
+        script = _repair_quotations(script, evidence, source_chunks)
+        script = _ensure_quote_card(script, narrative, evidence, source_chunks)
+        try:
+            _validate_script(
+                script, narrative, selected, evidence, source_chunks,
+                characters_per_minute=settings.script.characters_per_minute,
+                length_tolerance=settings.script.length_tolerance,
+            )
+            for paragraph in (item for section in script.sections for item in section.paragraphs):
+                if any(name in paragraph.text for name in restricted_names):
+                    raise ValueError(
+                        f"Book title/author exposed before final attribution: {paragraph.paragraph_id}"
+                    )
+        except ValueError as exc:
+            if attempt >= settings.script.max_validation_retries:
+                raise
+            validation_feedback = _validation_feedback(exc, script, narrative, evidence)
+            LOGGER.warning(
+                "Retrying Phase 6 after local validation failure: attempt=%d error=%s",
+                attempt + 1,
+                exc,
+            )
+            continue
+        break
+    if script is None:
+        raise RuntimeError("Script generation did not produce a document")
     sourced, clean = _render_scripts(
         script, evidence, candidates, selected, source_chunks,
         renderer=settings.video.primary_renderer, fps=settings.video.fps,
