@@ -17,7 +17,7 @@
 - 입력에 없는 book_id, evidence_id, 사실, 사례를 책의 주장처럼 만들지 않는다.
 - 내레이션 본문에서는 책 제목과 저자를 말하지 않는다. 내용이 책 소개처럼 끊기지 않고 하나의 이야기로 이어져야 한다.
 - 참고한 책 전체의 제목은 시스템이 결말 마지막에 별도로 추가하므로 대본 문단에 작성하지 않는다.
-- 본문 소단락 중 1개 또는 2개에만 quote_card를 하나씩 배치한다. 반드시 verified_quote_candidates에 있는 evidence만 사용하며, quote_card가 0개이거나 2개를 초과하는 응답은 허용되지 않는다. 목록에 없는 quotation evidence는 요약으로만 사용한다.
+- verified_quote_candidates가 있으면 본문 소단락 중 1개 또는 2개에만 quote_card를 하나씩 배치한다. 반드시 그 목록의 evidence만 사용한다. 목록이 비어 있으면 quote_card를 만들지 않고 모든 quotation evidence를 요약으로만 사용한다.
 - quote_card의 quote_text와 quotation 문단은 source chunk의 문구를 글자 그대로 사용한다. Markdown의 굵게 표시 기호만 생략할 수 있다.
 - quotation 문단에는 설명이나 출처명을 덧붙이지 않는다. book_id와 quote_evidence_id 하나만 정확히 연결한다.
 - quote_card에는 6~12초의 quote_duration_seconds를 지정한다. 이는 해당 섹션 안에 삽입할 짧은 인용 화면이다.

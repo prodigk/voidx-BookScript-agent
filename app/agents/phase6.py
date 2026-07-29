@@ -206,6 +206,7 @@ def _validate_script(
     *,
     characters_per_minute: int,
     length_tolerance: float,
+    quote_card_required: bool,
 ) -> None:
     if script.target_duration_seconds != narrative.total_seconds:
         raise ValueError("Script duration does not match narrative duration")
@@ -264,8 +265,10 @@ def _validate_script(
                 raise ValueError(f"Quote card text/source mismatch: {script_section.section_id}")
         elif quote_paragraphs or cue.quote_text or cue.quote_evidence_id or cue.quote_duration_seconds:
             raise ValueError(f"Quotation must use a quote card: {script_section.section_id}")
-    if not 1 <= quote_scenes <= 2:
+    if quote_card_required and not 1 <= quote_scenes <= 2:
         raise ValueError("Script must contain one or two quote-card scenes")
+    if not quote_card_required and quote_scenes:
+        raise ValueError("Script cannot contain a quote-card scene without verified quotation evidence")
     text_length = sum(len(paragraph.text) for section in script.sections for paragraph in section.paragraphs)
     target = round(narrative.total_seconds / 60 * characters_per_minute)
     minimum, maximum = target * (1 - length_tolerance), target * (1 + length_tolerance)
@@ -468,6 +471,7 @@ def generate_script(
                 script, narrative, selected, evidence, source_chunks,
                 characters_per_minute=settings.script.characters_per_minute,
                 length_tolerance=settings.script.length_tolerance,
+                quote_card_required=bool(verified_quote_candidates),
             )
             for paragraph in (item for section in script.sections for item in section.paragraphs):
                 if any(name in paragraph.text for name in restricted_names):

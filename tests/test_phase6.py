@@ -223,6 +223,18 @@ def test_generate_script_inserts_verified_quote_card_when_model_omits_it(tmp_pat
     assert "<!-- QUOTE_TEXT: 사회적 반응 -->" in sourced
 
 
+def test_generate_script_allows_no_quote_card_without_verified_candidate(tmp_path: Path) -> None:
+    settings, run_id, chunks = _write_run(tmp_path)
+    evidence_path = settings.project.output_path / run_id / "evidence.json"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    for item in evidence:
+        item["type"] = "paraphrase"
+    evidence_path.write_text(json.dumps(evidence, ensure_ascii=False), encoding="utf-8")
+    generate_script(settings, run_id, structured=MissingQuoteCardProvider(), source_chunks=chunks)
+    sourced = (settings.project.output_path / run_id / "script_with_sources.md").read_text(encoding="utf-8")
+    assert "<!-- QUOTE_SCENE:" not in sourced
+
+
 def test_verified_quote_uses_exact_source_wording_for_near_match() -> None:
     evidence = EvidenceItem(
         evidence_id="e_1", book_id="book_1", type="quotation",
