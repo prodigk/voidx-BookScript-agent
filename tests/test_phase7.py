@@ -66,6 +66,7 @@ def _write_run(tmp_path: Path, *, quotation: bool = False) -> tuple[Settings, st
 """
     (run / "script.md").write_text(clean_script, encoding="utf-8")
     artifacts = {
+        "input.json": {"topic": "사회적 반응", "content_format": "longform", "duration_minutes": 3, "target_book_count": 2},
         "evidence.json": [{"evidence_id": "e_1", "book_id": "book_1",
                            "type": "quotation" if quotation else "paraphrase", "claim": source_text,
                            "source_chunk_ids": ["chunk_1"], "confidence": 0.9}],
@@ -134,3 +135,45 @@ def test_create_validated_revision_replaces_only_invalid_paragraph(tmp_path: Pat
     assert "원문 범위로 문장을 완화합니다." in sourced
     assert "원문 범위로 문장을 완화합니다." in clean
     assert not (revision / "citations.json").exists()
+    manifest = json.loads((revision / "citation_revision.json").read_text(encoding="utf-8"))
+    assert manifest["source_run_id"] == run_id
+    assert manifest["revised_paragraph_ids"] == ["sec_01_p01"]
+
+
+def test_create_validated_revision_rejects_unavailable_selected_paragraph(tmp_path: Path) -> None:
+    settings, run_id, chunks = _write_run(tmp_path)
+    validate_script_run(
+        settings, run_id, structured=FakeCitationReviewer(supported=False), source_chunks=chunks,
+    )
+    try:
+        create_validated_revision(settings, run_id, ["missing_paragraph"])
+    except ValueError as exc:
+        assert "do not have high-severity revisions" in str(exc)
+    else:
+        raise AssertionError("Unavailable paragraph selection must be rejected")
+
+
+def test_shorts_validation_accepts_title_and_author_in_book_intro(tmp_path: Path) -> None:
+    settings, run_id, chunks = _write_run(tmp_path)
+    run = settings.project.output_path / run_id
+    input_payload = json.loads((run / "input.json").read_text(encoding="utf-8"))
+    input_payload.update({"content_format": "shorts", "duration_minutes": 1, "target_book_count": 1})
+    (run / "input.json").write_text(json.dumps(input_payload, ensure_ascii=False), encoding="utf-8")
+    selection = {
+        "selected_books": [{"book_id": "book_1", "role": "핵심 통찰", "selection_reason": "근거"}],
+        "excluded_books": [{"book_id": "book_2", "reason": "한 권 쇼츠"}],
+        "cross_book_connection": "책 하나를 주제와 연결한다.",
+    }
+    (run / "selected_books.json").write_text(json.dumps(selection, ensure_ascii=False), encoding="utf-8")
+    for name in ("script_with_sources.md", "script.md"):
+        text = (run / name).read_text(encoding="utf-8")
+        text = text.replace(
+            "이 영상은 『책 하나』와 『책 둘』의 내용을 바탕으로 구성되었습니다.",
+            "『책 하나』의 저자 저자 하나는 타인의 반응을 관계의 신호로 바라봅니다.",
+        )
+        (run / name).write_text(text, encoding="utf-8")
+
+    result = validate_script_run(settings, run_id, structured=FakeCitationReviewer(), source_chunks=chunks)
+
+    assert result.status == "approved"
+    assert not any(issue.category in {"incorrect_title", "incorrect_author"} for issue in result.issues)

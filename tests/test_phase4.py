@@ -80,6 +80,23 @@ class EditorialFakeProvider(FakeStructuredProvider):
         return super().parse(stage=stage, instructions=instructions, input_text=input_text, output_type=output_type)
 
 
+class ShortsStructuredProvider(FakeStructuredProvider):
+    def parse(self, *, stage, instructions, input_text, output_type):
+        if output_type is BookSelection:
+            context = __import__("json").loads(input_text)
+            assert context["target_book_count"] == 1
+            return BookSelection.model_validate({
+                "selected_books": [
+                    {"book_id": "book_1", "role": "핵심 통찰 소개", "selection_reason": "주제와 직접 연결"},
+                ],
+                "excluded_books": [],
+                "cross_book_connection": "책 1의 관점을 주제와 연결한다.",
+            })
+        return super().parse(
+            stage=stage, instructions=instructions, input_text=input_text, output_type=output_type,
+        )
+
+
 def _result(index: int) -> HybridSearchResult:
     return HybridSearchResult(
         chunk_id=f"chunk_{index}", book_id=f"book_{index}", title=f"책 {index}", author=f"저자 {index}",
@@ -156,3 +173,19 @@ def test_phase4_persists_injected_editorial_strategy(tmp_path: Path) -> None:
     strategy = (run_dir / "editorial_strategy.json").read_text(encoding="utf-8")
     assert "잠들기전 교양이" in strategy
     assert (run_dir / "insight_sources.json").is_file()
+
+
+def test_phase4_shorts_selects_exactly_one_supported_book(tmp_path: Path) -> None:
+    settings = Settings(project=ProjectSettings(output_path=tmp_path / "outputs"), insights=InsightSettings(enabled=False))
+    result = run_phase4(
+        settings,
+        TopicRequest(topic="타인의 평가를 다룬 한 권", content_format="shorts"),
+        structured=ShortsStructuredProvider(),
+        search=lambda query: [_result(1), _result(2), _result(3)],
+    )
+
+    assert result.status == "complete"
+    assert [item.book_id for item in result.selection.selected_books] == ["book_1"]
+    input_payload = (settings.project.output_path / result.run_id / "input.json").read_text(encoding="utf-8")
+    assert '"content_format": "shorts"' in input_payload
+    assert '"target_book_count": 1' in input_payload

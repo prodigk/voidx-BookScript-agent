@@ -18,6 +18,7 @@ ARTIFACT_MEDIA_TYPES: dict[str, str] = {
     "selected_books.json": "application/json",
     "selection_revision.json": "application/json",
     "narrative_revision.json": "application/json",
+    "citation_revision.json": "application/json",
     "evidence.json": "application/json",
     "editorial_strategy.json": "application/json",
     "insight_sources.json": "application/json",

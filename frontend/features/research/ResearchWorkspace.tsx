@@ -3,8 +3,8 @@
 import {useEffect, useRef, useState} from "react";
 import {BookMarked, Database, RotateCcw, WifiOff} from "lucide-react";
 
-import {createOutlineJob, createResearchJob, createScriptJob, createValidationJob, getLibraryStatus, getNarrativeArtifact, getResearchArtifacts, getResearchJob, getScriptArtifacts, getValidationArtifacts} from "@/lib/api";
-import type {CandidateBook, LibraryStatus, NarrativePlan, OutlineJob, ResearchJob, ResearchRequest, ScriptArtifacts, ScriptJob, ScriptJobRequest, SelectionArtifact, ValidationArtifacts, ValidationJob} from "@/types/api";
+import {createCitationRevisionJob, createOutlineJob, createResearchJob, createScriptJob, createValidationJob, getLibraryStatus, getNarrativeArtifact, getResearchArtifacts, getResearchJob, getScriptArtifacts, getValidationArtifacts} from "@/lib/api";
+import type {CandidateBook, CitationRevisionJob, LibraryStatus, NarrativePlan, OutlineJob, ResearchJob, ResearchRequest, ScriptArtifacts, ScriptJob, ScriptJobRequest, SelectionArtifact, ValidationArtifacts, ValidationJob} from "@/types/api";
 import {JobProgress} from "./JobProgress";
 import {OutlineProgress} from "./OutlineProgress";
 import {OutlineResult} from "./OutlineResult";
@@ -12,7 +12,7 @@ import {ResearchResult} from "./ResearchResult";
 import {ScriptProgress} from "./ScriptProgress";
 import {ScriptResult} from "./ScriptResult";
 import {TopicForm} from "./TopicForm";
-import {ValidationProgress} from "./ValidationProgress";
+import {CitationRevisionProgress, ValidationProgress} from "./ValidationProgress";
 import {ValidationResult} from "./ValidationResult";
 
 const POLL_INTERVAL_MS = 1500;
@@ -28,6 +28,7 @@ export function ResearchWorkspace() {
   const [script, setScript] = useState<ScriptArtifacts | null>(null);
   const [validationJob, setValidationJob] = useState<ValidationJob | null>(null);
   const [validation, setValidation] = useState<ValidationArtifacts | null>(null);
+  const [citationRevisionJob, setCitationRevisionJob] = useState<CitationRevisionJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
 
@@ -108,6 +109,29 @@ export function ResearchWorkspace() {
     }
   };
 
+  const pollCitationRevision = async (jobId: string) => {
+    while (alive.current) {
+      await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS));
+      if (!alive.current) return;
+      const latest = await getResearchJob(jobId);
+      if (latest.kind !== "citation_revision") throw new Error("부분 재작성 작업이 아닌 상태 응답을 받았습니다.");
+      setCitationRevisionJob(latest);
+      if (latest.status === "failed") return;
+      if (latest.status === "succeeded") {
+        if (!latest.run_id) throw new Error("부분 재작성 실행 ID를 찾을 수 없습니다.");
+        const [scriptArtifacts, validationArtifacts] = await Promise.all([
+          getScriptArtifacts(latest.run_id),
+          getValidationArtifacts(latest.run_id),
+        ]);
+        if (alive.current) {
+          setScript(scriptArtifacts);
+          setValidation(validationArtifacts);
+        }
+        return;
+      }
+    }
+  };
+
   const startResearch = async (request: ResearchRequest) => {
     setError(null);
     setResult(null);
@@ -117,6 +141,7 @@ export function ResearchWorkspace() {
     setScript(null);
     setValidationJob(null);
     setValidation(null);
+    setCitationRevisionJob(null);
     try {
       const created = await createResearchJob(request);
       setJob(created);
@@ -136,6 +161,7 @@ export function ResearchWorkspace() {
     setScriptJob(null);
     setValidationJob(null);
     setValidation(null);
+    setCitationRevisionJob(null);
     try {
       const created = await createOutlineJob(job.run_id, selectedBookIds);
       setOutlineJob(created);
@@ -153,6 +179,7 @@ export function ResearchWorkspace() {
     setScript(null);
     setValidationJob(null);
     setValidation(null);
+    setCitationRevisionJob(null);
     try {
       const created = await createScriptJob(outlineJob.run_id, payload);
       setScriptJob(created);
@@ -168,6 +195,7 @@ export function ResearchWorkspace() {
     if (!script?.runId) return;
     setError(null);
     setValidation(null);
+    setCitationRevisionJob(null);
     try {
       const created = await createValidationJob(script.runId);
       setValidationJob(created);
@@ -179,7 +207,22 @@ export function ResearchWorkspace() {
     }
   };
 
-  const busy = job?.status === "queued" || job?.status === "running" || outlineJob?.status === "queued" || outlineJob?.status === "running" || scriptJob?.status === "queued" || scriptJob?.status === "running" || validationJob?.status === "queued" || validationJob?.status === "running";
+  const reviseAndRevalidate = async (paragraphIds: string[]) => {
+    if (!validation?.runId) return;
+    setError(null);
+    setValidationJob(null);
+    try {
+      const created = await createCitationRevisionJob(validation.runId, paragraphIds);
+      setCitationRevisionJob(created);
+      void pollCitationRevision(created.job_id).catch((reason: unknown) => {
+        if (alive.current) setError(reason instanceof Error ? reason.message : "부분 재작성 상태를 확인할 수 없습니다.");
+      });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "부분 재작성 작업을 시작할 수 없습니다.");
+    }
+  };
+
+  const busy = job?.status === "queued" || job?.status === "running" || outlineJob?.status === "queued" || outlineJob?.status === "running" || scriptJob?.status === "queued" || scriptJob?.status === "running" || validationJob?.status === "queued" || validationJob?.status === "running" || citationRevisionJob?.status === "queued" || citationRevisionJob?.status === "running";
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
@@ -225,13 +268,14 @@ export function ResearchWorkspace() {
             <p className="mt-2 text-sm leading-6 text-muted">주제를 조금 더 구체화하거나 관점을 넓혀 다시 검색해 주세요. 근거 없이 대본을 생성하지 않았습니다.</p>
           </section>
         ) : null}
-        {result ? <div className="mt-6"><ResearchResult candidates={result.candidates} selection={result.selection} busy={Boolean((outlineJob && outlineJob.status !== "failed" && outlineJob.status !== "succeeded") || (scriptJob && scriptJob.status !== "failed" && scriptJob.status !== "succeeded") || (validationJob && validationJob.status !== "failed" && validationJob.status !== "succeeded"))} onGenerateOutline={generateOutline} /></div> : null}
+        {result ? <div className="mt-6"><ResearchResult candidates={result.candidates} selection={result.selection} contentFormat={job?.request.content_format} busy={Boolean((outlineJob && outlineJob.status !== "failed" && outlineJob.status !== "succeeded") || (scriptJob && scriptJob.status !== "failed" && scriptJob.status !== "succeeded") || (validationJob && validationJob.status !== "failed" && validationJob.status !== "succeeded"))} onGenerateOutline={generateOutline} /></div> : null}
         {outlineJob ? <OutlineProgress job={outlineJob} /> : null}
         {outline && result ? <OutlineResult plan={outline.plan} selection={outline.selection} candidates={result.candidates} busy={Boolean((scriptJob && scriptJob.status !== "failed" && scriptJob.status !== "succeeded") || (validationJob && validationJob.status !== "failed" && validationJob.status !== "succeeded"))} onGenerateScript={generateScript} /> : null}
         {scriptJob ? <ScriptProgress job={scriptJob} /> : null}
         {script ? <ScriptResult artifacts={script} busy={Boolean(validationJob && validationJob.status !== "failed" && validationJob.status !== "succeeded")} validated={Boolean(validation)} onValidate={validateScript} /> : null}
         {validationJob ? <ValidationProgress job={validationJob} /> : null}
-        {validation ? <ValidationResult artifacts={validation} /> : null}
+        {citationRevisionJob ? <CitationRevisionProgress job={citationRevisionJob} /> : null}
+        {validation ? <ValidationResult artifacts={validation} busy={Boolean(citationRevisionJob && citationRevisionJob.status !== "failed" && citationRevisionJob.status !== "succeeded")} onRevise={reviseAndRevalidate} /> : null}
       </div>
     </main>
   );

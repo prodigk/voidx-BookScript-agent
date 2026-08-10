@@ -50,6 +50,33 @@ class InvalidEvidenceProvider(FakeNarrativeProvider):
         return plan.model_copy(update={"sections": sections})
 
 
+class ShortsNarrativeProvider:
+    def parse(self, *, stage, instructions, input_text, output_type):
+        context = json.loads(input_text)
+        assert context["request"]["content_format"] == "shorts"
+        assert len(context["selected_books"]) == 1
+        return NarrativePlan.model_validate({
+            "title_candidates": ["불안할 때 펼칠 한 권", "타인의 시선에서 벗어나는 60초", "나를 지키는 책"],
+            "core_message": "타인의 평가는 내 가치의 판결문이 아니다.",
+            "emotional_arc": ["공감", "발견", "이해", "여운"],
+            "sections": [
+                {"section_id": "hook", "title": "혹시 평가가 두렵나요", "narrative_function": "hook",
+                 "purpose": "생활 장면으로 질문을 연다.", "key_points": ["평가 불안을 묻는다."],
+                 "book_ids": [], "evidence_ids": [], "estimated_seconds": 12},
+                {"section_id": "intro", "title": "오늘의 한 권", "narrative_function": "book_intro",
+                 "purpose": "책과 저자를 공개한다.", "key_points": ["책의 문제의식을 소개한다."],
+                 "book_ids": ["book_1"], "evidence_ids": ["e_1"], "estimated_seconds": 18},
+                {"section_id": "insight", "title": "핵심 통찰", "narrative_function": "book_perspective",
+                 "purpose": "한 가지 관점을 설명한다.", "key_points": ["관계 욕구를 이해한다."],
+                 "book_ids": ["book_1"], "evidence_ids": ["e_1"], "estimated_seconds": 35},
+                {"section_id": "end", "title": "오늘의 한 문장", "narrative_function": "conclusion",
+                 "purpose": "적용과 여운을 남긴다.", "key_points": ["내 기준을 선택한다."],
+                 "book_ids": [], "evidence_ids": [], "estimated_seconds": 15},
+            ],
+            "total_seconds": 80,
+        })
+
+
 def _write_run(tmp_path: Path) -> tuple[Settings, str]:
     output_path = tmp_path / "outputs"
     run_id = "run_001"
@@ -81,6 +108,21 @@ def _write_run(tmp_path: Path) -> tuple[Settings, str]:
     for name, payload in artifacts.items():
         (run_dir / name).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return Settings(project=ProjectSettings(output_path=output_path)), run_id
+
+
+def _write_shorts_run(tmp_path: Path) -> tuple[Settings, str]:
+    settings, run_id = _write_run(tmp_path)
+    run_dir = settings.project.output_path / run_id
+    payload = json.loads((run_dir / "input.json").read_text(encoding="utf-8"))
+    payload.update({"content_format": "shorts", "duration_minutes": 1, "target_book_count": 1})
+    (run_dir / "input.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    selection = {
+        "selected_books": [{"book_id": "book_1", "role": "핵심 통찰", "selection_reason": "근거 충분"}],
+        "excluded_books": [{"book_id": "book_2", "reason": "한 권 쇼츠 범위 밖"}],
+        "cross_book_connection": "책 하나의 핵심 관점을 주제와 연결한다.",
+    }
+    (run_dir / "selected_books.json").write_text(json.dumps(selection, ensure_ascii=False), encoding="utf-8")
+    return settings, run_id
 
 
 def test_generate_narrative_preserves_evidence_and_normalizes_duration(tmp_path: Path) -> None:
@@ -116,3 +158,16 @@ def test_generate_narrative_rejects_unknown_evidence_before_writing(tmp_path: Pa
 def test_resolve_run_dir_rejects_path_traversal(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         resolve_run_dir(tmp_path / "outputs", "../outside")
+
+
+def test_generate_shorts_narrative_uses_one_book_and_four_sections(tmp_path: Path) -> None:
+    settings, run_id = _write_shorts_run(tmp_path)
+    plan = generate_narrative(settings, run_id, structured=ShortsNarrativeProvider())
+
+    assert plan.total_seconds == 60
+    assert len(plan.sections) == 4
+    assert plan.sections[1].narrative_function == "book_intro"
+    assert sum(section.estimated_seconds for section in plan.sections) == 60
+    outline = (settings.project.output_path / run_id / "outline.md").read_text(encoding="utf-8")
+    assert "- 형식: 쇼츠" in outline
+    assert "- 예상 길이: 1분 0초" in outline

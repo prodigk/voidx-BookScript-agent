@@ -24,9 +24,11 @@ from app.schemas.validation import (
     SourceReference,
     ValidationIssue,
 )
+from app.schemas.topic import TopicRequest
 
 MARKER_PATTERN = re.compile(r"\[([A-Z_]+):([^\]]*)\]")
 SECTION_PATTERN = re.compile(r"<!-- REMOTION: section_id=([^ ]+)")
+TARGETED_REWRITE_CATEGORIES = {"unsupported_paraphrase", "unsupported_causal_claim"}
 
 
 def parse_sourced_script(text: str) -> list[ParsedScriptParagraph]:
@@ -167,6 +169,7 @@ def validate_script_run(
     candidates = [CandidateBook.model_validate(item) for item in _read_json(run_dir / "candidate_books.json")]
     candidate_by_id = {item.book_id: item for item in candidates}
     selected = BookSelection.model_validate(_read_json(run_dir / "selected_books.json"))
+    request = TopicRequest.model_validate(_read_json(run_dir / "input.json"))
     required_chunks = {item for paragraph in grounded for item in paragraph.chunk_ids}
     source_chunks = source_chunks if source_chunks is not None else _load_source_chunks(
         settings.project.database_path, required_chunks,
@@ -206,12 +209,20 @@ def validate_script_run(
             if _plain_markdown(paragraph.text) not in _plain_markdown(source_text):
                 _issue(issues, paragraph, "modified_quotation", "직접 인용문이 원문과 일치하지 않습니다.", "원문의 문구를 그대로 사용합니다.")
                 deterministic_invalid.add(paragraph.paragraph_id)
-    title_line = paragraphs[-1].text if paragraphs else ""
+    title_line = "\n".join(item.text for item in paragraphs) if request.content_format == "shorts" else (paragraphs[-1].text if paragraphs else "")
     for item in selected.selected_books:
-        title = _display_title(candidate_by_id[item.book_id].title)
+        candidate = candidate_by_id[item.book_id]
+        title = _display_title(candidate.title)
+        reference_paragraph = next(
+            (paragraph for paragraph in paragraphs if title in paragraph.text),
+            paragraphs[-1],
+        )
         if f"『{title}』" not in title_line:
-            _issue(issues, paragraphs[-1], "incorrect_title", f"최종 참고 도서 표기에서 제목을 확인할 수 없습니다: {title}", "선정 도서 제목을 정확히 표기합니다.")
-            deterministic_invalid.add(paragraphs[-1].paragraph_id)
+            _issue(issues, reference_paragraph, "incorrect_title", f"최종 참고 도서 표기에서 제목을 확인할 수 없습니다: {title}", "선정 도서 제목을 정확히 표기합니다.")
+            deterministic_invalid.add(reference_paragraph.paragraph_id)
+        if request.content_format == "shorts" and candidate.author not in {"", "unknown"} and candidate.author not in title_line:
+            _issue(issues, reference_paragraph, "incorrect_author", f"쇼츠 책 소개에서 저자를 확인할 수 없습니다: {candidate.author}", "선정 도서 저자를 정확히 표기합니다.")
+            deterministic_invalid.add(reference_paragraph.paragraph_id)
     review_input = []
     for paragraph in grounded:
         review_input.append({
@@ -262,21 +273,36 @@ def validate_script_run(
     return result
 
 
-def create_validated_revision(settings: Settings, source_run_id: str) -> str:
-    """Create a new run with only invalid citation paragraphs replaced by reviewed rewrites."""
+def create_validated_revision(
+    settings: Settings,
+    source_run_id: str,
+    paragraph_ids: list[str] | None = None,
+) -> str:
+    """Create an immutable run replacing only selected invalid citation paragraphs."""
     source = resolve_run_dir(settings.project.output_path, source_run_id)
     result = CitationValidationResult.model_validate(_read_json(source / "citations.json"))
     if result.status != "needs_revision":
         raise ValueError("Validation result does not require revision")
+    requested = set(paragraph_ids) if paragraph_ids is not None else None
+    if requested is not None and (not requested or len(requested) != len(paragraph_ids)):
+        raise ValueError("paragraph_ids must contain unique values")
     replacements: dict[str, str] = {}
     citations = {item.paragraph_id: item for item in result.citations}
     for issue in result.issues:
-        if issue.severity != "high" or issue.paragraph_id not in citations:
+        if (
+            issue.severity != "high"
+            or issue.category not in TARGETED_REWRITE_CATEGORIES
+            or issue.paragraph_id not in citations
+            or (requested is not None and issue.paragraph_id not in requested)
+        ):
             continue
         previous = replacements.get(issue.paragraph_id)
         if previous and previous != issue.recommended_action:
             raise ValueError(f"Conflicting revisions for paragraph: {issue.paragraph_id}")
         replacements[issue.paragraph_id] = issue.recommended_action
+    if requested is not None and set(replacements) != requested:
+        unavailable = ", ".join(sorted(requested - set(replacements)))
+        raise ValueError(f"Selected paragraphs do not have high-severity revisions: {unavailable}")
     if not replacements:
         raise ValueError("No targeted revisions are available")
     run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_citation-revision"
@@ -300,4 +326,16 @@ def create_validated_revision(settings: Settings, source_run_id: str) -> str:
         clean = clean.replace(clean_anchor, f"\n{replacement}\n", 1)
     sourced_path.write_text(sourced, encoding="utf-8")
     clean_path.write_text(clean, encoding="utf-8")
+    (destination / "citation_revision.json").write_text(
+        json.dumps(
+            {
+                "source_run_id": source_run_id,
+                "revised_paragraph_ids": sorted(replacements),
+                "created_at": datetime.now().astimezone().isoformat(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     return run_id

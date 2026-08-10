@@ -26,6 +26,7 @@ def _client(
     revision_builder: Any = lambda settings, request: "narrative_revision_run",
     script_runner: Any = lambda settings, run_id: None,
     validation_runner: Any = lambda settings, run_id: SimpleNamespace(status="approved"),
+    citation_revision_builder: Any = lambda settings, run_id, paragraph_ids: "citation_revision_run",
 ) -> tuple[TestClient, Path, Settings]:
     library = tmp_path / "library"
     library.mkdir(parents=True)
@@ -93,6 +94,7 @@ def _client(
         revision_builder=revision_builder,
         script_runner=script_runner,
         validation_runner=validation_runner,
+        citation_revision_builder=citation_revision_builder,
     )), output, settings
 
 
@@ -170,6 +172,28 @@ def test_creates_and_completes_research_job(tmp_path: Path) -> None:
     assert received[0].desired_lenses == ["인문학", "심리학"]
     assert received[0].excluded_lenses == ["커리어", "생산성", "조직관리", "성과 중심"]
     assert client.get("/api/jobs").json()["total"] == 1
+
+
+def test_research_api_normalizes_shorts_to_one_minute_and_one_book(tmp_path: Path) -> None:
+    received: list[TopicRequest] = []
+
+    def runner(settings: Settings, request: TopicRequest) -> Any:
+        received.append(request)
+        return SimpleNamespace(status="complete", run_id="shorts_run")
+
+    client, _, _ = _client(tmp_path, research_runner=runner)
+    response = client.post("/api/research-jobs", json={
+        "topic": "불안할 때 읽을 한 권",
+        "content_format": "shorts",
+        "duration_minutes": 20,
+        "target_book_count": 4,
+    })
+
+    assert response.status_code == 202
+    assert response.json()["request"]["content_format"] == "shorts"
+    assert response.json()["request"]["duration_minutes"] == 1
+    assert response.json()["request"]["target_book_count"] == 1
+    assert received[0].content_format == "shorts"
 
 
 def test_records_insufficient_evidence_and_runner_failure(
@@ -341,3 +365,60 @@ def test_rejects_missing_or_already_completed_validation(tmp_path: Path) -> None
     missing = client.post("/api/runs/run_001/validation-jobs", json={"source_run_id": "run_001"})
     assert missing.status_code == 400
     assert "필요한 대본" in missing.json()["detail"]
+
+
+def test_rewrites_selected_paragraphs_and_revalidates_in_one_job(tmp_path: Path) -> None:
+    built: list[tuple[str, list[str]]] = []
+    validated: list[str] = []
+
+    def builder(settings: Settings, run_id: str, paragraph_ids: list[str]) -> str:
+        built.append((run_id, paragraph_ids))
+        return "citation_revision_run"
+
+    def validator(settings: Settings, run_id: str) -> Any:
+        validated.append(run_id)
+        return SimpleNamespace(status="approved")
+
+    client, output, _ = _client(
+        tmp_path,
+        citation_revision_builder=builder,
+        validation_runner=validator,
+    )
+    (output / "run_001" / "citations.json").write_text(json.dumps({
+        "status": "needs_revision",
+        "citations": [{
+            "citation_id": "citation_001", "paragraph_id": "sec_01_p01",
+            "section_id": "sec_01", "text_type": "paraphrase", "text": "기존 문단",
+            "book_ids": ["book_1"], "evidence_ids": ["ev_1"], "sources": [],
+            "status": "invalid", "confidence": 0.4, "review_summary": "확대 해석",
+        }],
+        "issues": [{
+            "issue_id": "issue_001", "severity": "high",
+            "category": "unsupported_paraphrase", "section_id": "sec_01",
+            "paragraph_id": "sec_01_p01", "description": "원문보다 확대됐습니다.",
+            "recommended_action": "근거 범위로 문장을 완화합니다.", "source_chunk_ids": ["chunk_1"],
+        }],
+        "valid_count": 0, "needs_review_count": 0, "invalid_count": 1,
+    }, ensure_ascii=False), encoding="utf-8")
+
+    response = client.post("/api/runs/run_001/citation-revision-jobs", json={
+        "source_run_id": "run_001", "paragraph_ids": ["sec_01_p01"],
+    })
+
+    assert response.status_code == 202
+    job = client.get(f"/api/jobs/{response.json()['job_id']}").json()
+    assert job["kind"] == "citation_revision"
+    assert job["status"] == "succeeded"
+    assert job["stage"] == "revision_approved"
+    assert job["run_id"] == "citation_revision_run"
+    assert built == [("run_001", ["sec_01_p01"])]
+    assert validated == ["citation_revision_run"]
+
+
+def test_rejects_citation_revision_without_high_issue(tmp_path: Path) -> None:
+    client, _, _ = _client(tmp_path)
+    response = client.post("/api/runs/run_001/citation-revision-jobs", json={
+        "source_run_id": "run_001", "paragraph_ids": ["sec_01_p01"],
+    })
+    assert response.status_code == 400
+    assert "수정이 필요한" in response.json()["detail"]

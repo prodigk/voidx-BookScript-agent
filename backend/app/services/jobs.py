@@ -14,13 +14,15 @@ from uuid import uuid4
 from app.agents.phase4 import run_phase4
 from app.agents.phase5 import generate_narrative
 from app.agents.phase6 import generate_script
-from app.agents.phase7 import validate_script_run
+from app.agents.phase7 import create_validated_revision, validate_script_run
 from app.config import Settings
 from app.schemas.topic import TopicRequest
 from app.storage.database import connect_database
 from backend.app.schemas import (
     OutlineJobRequest,
     OutlineJobResponse,
+    CitationRevisionJobRequest,
+    CitationRevisionJobResponse,
     PipelineJobResponse,
     ResearchJobListResponse,
     ResearchJobResponse,
@@ -33,6 +35,7 @@ from backend.app.services.narrative_revision import (
     prepare_narrative_revision,
     validate_script_job_request,
 )
+from backend.app.services.citation_revision import validate_citation_revision_request
 from backend.app.services.selection import prepare_selection_revision, validate_outline_request
 from backend.app.services.validation import validate_validation_job_request
 
@@ -50,6 +53,7 @@ NarrativeRunner = Callable[[Settings, str], object]
 NarrativeRevisionBuilder = Callable[[Settings, ScriptJobRequest], str]
 ScriptRunner = Callable[[Settings, str], object]
 ValidationRunner = Callable[[Settings, str], object]
+CitationRevisionBuilder = Callable[[Settings, str, list[str] | None], str]
 
 
 class ActiveJobError(RuntimeError):
@@ -125,6 +129,11 @@ def _to_response(row: sqlite3.Row) -> PipelineJobResponse:
     if row["kind"] == "validation":
         return ValidationJobResponse(
             **common, request=ValidationJobRequest.model_validate_json(row["request_json"])
+        )
+    if row["kind"] == "citation_revision":
+        return CitationRevisionJobResponse(
+            **common,
+            request=CitationRevisionJobRequest.model_validate_json(row["request_json"]),
         )
     raise ValueError(f"Unsupported pipeline job kind: {row['kind']}")
 
@@ -233,6 +242,37 @@ def create_validation_job(
     response = _to_response(row)
     if not isinstance(response, ValidationJobResponse):
         raise TypeError("Created job did not have validation kind")
+    return response
+
+
+def create_citation_revision_job(
+    settings: Settings,
+    request: CitationRevisionJobRequest,
+) -> CitationRevisionJobResponse:
+    """Validate and persist one targeted revision plus automatic revalidation job."""
+    validate_citation_revision_request(settings, request)
+    job_id = uuid4().hex
+    created_at = _now()
+    with connect_database(settings.project.database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        active = int(connection.execute(
+            "SELECT COUNT(*) FROM pipeline_jobs WHERE status IN ('queued', 'running')"
+        ).fetchone()[0])
+        if active >= settings.backend.max_concurrent_jobs:
+            raise ActiveJobError("이미 실행 중이거나 대기 중인 파이프라인 작업이 있습니다.")
+        connection.execute(
+            """
+            INSERT INTO pipeline_jobs(id,kind,status,stage,request_json,created_at)
+            VALUES (?, 'citation_revision', 'queued', 'queued', ?, ?)
+            """,
+            (job_id, request.model_dump_json(), created_at),
+        )
+        row = connection.execute(
+            "SELECT * FROM pipeline_jobs WHERE id = ?", (job_id,)
+        ).fetchone()
+    response = _to_response(row)
+    if not isinstance(response, CitationRevisionJobResponse):
+        raise TypeError("Created job did not have citation_revision kind")
     return response
 
 
@@ -434,6 +474,62 @@ def execute_validation_job(
     except Exception as exc:  # Background boundary must persist every failure.
         message = _safe_error_message(exc)
         logger.exception("Validation job failed: job_id=%s", job_id)
+        with connect_database(settings.project.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE pipeline_jobs
+                SET status='failed', stage='failed', error=?, finished_at=? WHERE id=?
+                """,
+                (message, _now(), job_id),
+            )
+
+
+def execute_citation_revision_job(
+    settings: Settings,
+    job_id: str,
+    *,
+    revision_builder: CitationRevisionBuilder = create_validated_revision,
+    validation_runner: ValidationRunner = validate_script_run,
+) -> None:
+    """Rewrite selected invalid paragraphs in a new run and immediately revalidate it."""
+    with connect_database(settings.project.database_path) as connection:
+        row = connection.execute(
+            "SELECT request_json FROM pipeline_jobs WHERE id = ? AND kind = 'citation_revision'",
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            logger.error("Citation revision job disappeared before execution: %s", job_id)
+            return
+        connection.execute(
+            "UPDATE pipeline_jobs SET status='running', stage='targeted_revision', started_at=? WHERE id=?",
+            (_now(), job_id),
+        )
+    request = CitationRevisionJobRequest.model_validate_json(row["request_json"])
+    try:
+        run_id = revision_builder(
+            settings,
+            request.source_run_id,
+            request.paragraph_ids,
+        )
+        with connect_database(settings.project.database_path) as connection:
+            connection.execute(
+                "UPDATE pipeline_jobs SET stage='phase7_revalidation', run_id=? WHERE id=?",
+                (run_id, job_id),
+            )
+        result = validation_runner(settings, run_id)
+        stage = "revision_approved" if result.status == "approved" else "revision_needs_revision"
+        with connect_database(settings.project.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE pipeline_jobs
+                SET status='succeeded', stage=?, pipeline_status=?, finished_at=?
+                WHERE id=?
+                """,
+                (stage, result.status, _now(), job_id),
+            )
+    except Exception as exc:  # Background boundary must persist every failure.
+        message = _safe_error_message(exc)
+        logger.exception("Citation revision job failed: job_id=%s", job_id)
         with connect_database(settings.project.database_path) as connection:
             connection.execute(
                 """

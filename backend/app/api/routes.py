@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from app.config import Settings
 from app.schemas.topic import TopicRequest
 from backend.app.schemas import (
+    CitationRevisionJobRequest,
+    CitationRevisionJobResponse,
     HealthResponse,
     LibraryStatusResponse,
     OutlineJobRequest,
@@ -27,6 +29,7 @@ from backend.app.schemas import (
 )
 from backend.app.services.jobs import (
     ActiveJobError,
+    CitationRevisionBuilder,
     NarrativeRunner,
     NarrativeRevisionBuilder,
     ResearchRunner,
@@ -34,10 +37,12 @@ from backend.app.services.jobs import (
     ScriptRunner,
     ValidationRunner,
     create_outline_job,
+    create_citation_revision_job,
     create_research_job,
     create_script_job,
     create_validation_job,
     execute_outline_job,
+    execute_citation_revision_job,
     execute_research_job,
     execute_script_job,
     execute_validation_job,
@@ -76,6 +81,10 @@ def get_script_runner(request: Request) -> ScriptRunner:
 
 def get_validation_runner(request: Request) -> ValidationRunner:
     return request.app.state.validation_runner
+
+
+def get_citation_revision_builder(request: Request) -> CitationRevisionBuilder:
+    return request.app.state.citation_revision_builder
 
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
@@ -236,6 +245,40 @@ def create_validation(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     background_tasks.add_task(
         execute_validation_job, settings, job.job_id, validation_runner=validation_runner,
+    )
+    return job
+
+
+@router.post(
+    "/api/runs/{source_run_id}/citation-revision-jobs",
+    response_model=CitationRevisionJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["jobs"],
+)
+def create_citation_revision(
+    source_run_id: str,
+    request_body: CitationRevisionJobRequest,
+    background_tasks: BackgroundTasks,
+    settings: Settings = Depends(get_settings),
+    revision_builder: CitationRevisionBuilder = Depends(get_citation_revision_builder),
+    validation_runner: ValidationRunner = Depends(get_validation_runner),
+) -> CitationRevisionJobResponse:
+    if request_body.source_run_id != source_run_id:
+        raise HTTPException(status_code=400, detail="경로와 요청의 source_run_id가 일치하지 않습니다.")
+    try:
+        job = create_citation_revision_job(settings, request_body)
+    except ActiveJobError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    background_tasks.add_task(
+        execute_citation_revision_job,
+        settings,
+        job.job_id,
+        revision_builder=revision_builder,
+        validation_runner=validation_runner,
     )
     return job
 

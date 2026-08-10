@@ -76,6 +76,7 @@ Phase 4의 `주제 분석 → 검색어 확장 → 책 랭킹 → 근거 큐레�
 ```json
 {
   "topic": "왜 우리는 타인의 평가를 지나치게 의식하는가",
+  "content_format": "longform",
   "duration_minutes": 12,
   "target_book_count": 3,
   "tone": "사색적",
@@ -86,11 +87,13 @@ Phase 4의 `주제 분석 → 검색어 확장 → 책 랭킹 → 근거 큐레�
 }
 ```
 
+한 권 쇼츠는 `"content_format": "shorts"`로 요청한다. 입력된 길이와 책 수와 무관하게 서버가 `duration_minutes=1`, `target_book_count=1`로 정규화한다.
+
 기본 동시 실행 수는 1이다. 이미 `queued` 또는 `running` 작업이 있으면 `409 Conflict`를 반환한다. 설정 한도는 `BACKEND_MAX_CONCURRENT_JOBS`로 조정할 수 있지만 로컬 SQLite와 API 비용 보호를 위해 1을 권장한다.
 
 ### `POST /api/runs/{run_id}/outline-jobs`
 
-검토한 후보 가운데 2~4권을 영상에 등장할 순서대로 확정하고 Phase 5 내러티브를 생성한다.
+검토한 후보 가운데 일반 영상은 2~4권을 등장 순서대로, 쇼츠는 정확히 1권을 확정하고 Phase 5 내러티브를 생성한다.
 
 ```json
 {
@@ -135,6 +138,19 @@ Phase 6 대본을 원본 Markdown과 인덱스 청크에 대조하는 Phase 7 �
 
 `script.md`와 `script_with_sources.md`가 모두 있어야 하며 이미 `citations.json` 또는 `validation_report.md`가 존재하면 중복 검증을 차단한다. 검증은 원본 파일 경계, 행 범위, content hash, 직접 인용, 책·근거·청크 귀속과 최종 참고 도서 표기를 결정적으로 검사한다. 의미 기반 요약·해석 검토에는 대본에 연결된 제한 청크만 전달한다. 작업 결과의 `pipeline_status`는 `approved` 또는 `needs_revision`이고 생성된 두 검증 산출물은 allowlist API로 조회·다운로드할 수 있다.
 
+### `POST /api/runs/{run_id}/citation-revision-jobs`
+
+검증 결과에서 선택한 고위험 문단만 새 불변 리비전으로 재작성하고 같은 작업 안에서 Phase 7을 다시 실행한다.
+
+```json
+{
+  "source_run_id": "20260730_...-script-revision",
+  "paragraph_ids": ["s2_p3", "s4_p2"]
+}
+```
+
+선택 가능한 문단은 검토자가 근거 범위의 대체 문장을 제시한 `unsupported_paraphrase`와 `unsupported_causal_claim` 이슈로 제한한다. 새 실행은 원본 산출물을 복사하되 이전 `citations.json`과 `validation_report.md`는 복사하지 않으며 `citation_revision.json`에 원본 실행 ID와 변경 문단 ID를 기록한다. 재검증 결과는 `revision_approved` 또는 `revision_needs_revision` 단계와 새 검증 산출물로 저장된다. 출처 누락, 잘못된 행 범위, 변형 인용, 도서 귀속 오류는 문장만 바꿔 해결할 수 없으므로 이 API에서 제외한다.
+
 ### `GET /api/jobs`
 
 최근 연구와 구성안 작업을 반환한다. 작업 상태는 `queued`, `running`, `succeeded`, `failed`이며 세부 단계와 파이프라인 결과를 함께 제공한다.
@@ -157,10 +173,8 @@ Phase 6 대본을 원본 Markdown과 인덱스 청크에 대조하는 Phase 7 �
 
 ## 다음 백엔드 슬라이스
 
-Phase 4 후보 선택, Phase 5 구성안 편집, Phase 6 대본과 Phase 7 검증 결과 검토까지 연결되었다. 다음 슬라이스는 검증 문제가 있는 부분만 안전하게 수정하는 작업이다.
+Phase 4 후보 선택, Phase 5 구성안 편집, Phase 6 대본, Phase 7 검증과 선택 문단 부분 리비전·자동 재검증까지 연결되었다.
 
-1. 문제가 있는 문단만 근거 범위 안에서 재작성하는 리비전
-2. 수정 리비전의 Phase 7 재검증
-3. 승인 대본과 Remotion manifest 연결
-4. 작업 취소와 명시적 재시도
-5. 새로고침 후 작업 상태 복원
+1. 승인 대본과 Remotion manifest 연결
+2. 작업 취소와 명시적 재시도
+3. 새로고침 후 작업 상태 복원

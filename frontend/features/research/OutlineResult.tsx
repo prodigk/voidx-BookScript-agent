@@ -6,7 +6,7 @@ import {ArrowDown, ArrowUp, Clock3, FileText, GripVertical, Quote, Sparkles} fro
 import type {CandidateBook, NarrativePlan, NarrativeSection, SelectionArtifact} from "@/types/api";
 
 const FUNCTION_LABELS: Record<string, string> = {
-  hook: "도입", problem: "문제 제기", book_perspective: "책의 관점", transition: "전환",
+  hook: "도입", problem: "문제 제기", book_intro: "책 소개", book_perspective: "책의 관점", transition: "전환",
   tension: "긴장", integration: "통합", application: "적용", conclusion: "마무리",
 };
 

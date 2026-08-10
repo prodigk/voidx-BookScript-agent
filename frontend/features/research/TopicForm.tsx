@@ -21,6 +21,7 @@ const EXCLUSIONS = [...FOCUS_EXCLUSIONS, "투자", "종교적 해석"];
 
 type FormState = {
   topic: string;
+  contentFormat: "longform" | "shorts";
   duration: number;
   books: number;
   tone: string;
@@ -33,6 +34,7 @@ type FormState = {
 
 const DEFAULT_STATE: FormState = {
   topic: "",
+  contentFormat: "longform",
   duration: 12,
   books: 3,
   tone: "사색적",
@@ -66,11 +68,23 @@ export function TopicForm({disabled = false, onSubmit}: TopicFormProps) {
     const opening = form.emotions.length ? form.emotions.join("·") : "차분한 문제의식";
     const middle = form.lenses.length ? form.lenses.join("·") : "도서 근거";
     const ending = form.expansions.length ? `${form.expansions.join("·")}로 확장` : "성찰로 마무리";
-    return `${form.audience}에게 ${opening}에서 출발해 ${middle} 관점으로 설명하고, ${ending}합니다.`;
+    const format = form.contentFormat === "shorts"
+      ? "60초 안에 한 권의 핵심 통찰만 소개하고"
+      : `${form.books}권을 연결해 설명하고`;
+    return `${form.audience}에게 ${opening}에서 출발해 ${middle} 관점으로 ${format}, ${ending}합니다.`;
   }, [form]);
 
   const patch = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((current) => ({...current, [key]: value}));
+  };
+
+  const setContentFormat = (contentFormat: FormState["contentFormat"]) => {
+    setForm((current) => ({
+      ...current,
+      contentFormat,
+      duration: contentFormat === "shorts" ? 1 : 12,
+      books: contentFormat === "shorts" ? 1 : 3,
+    }));
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -83,6 +97,7 @@ export function TopicForm({disabled = false, onSubmit}: TopicFormProps) {
     setError(null);
     await onSubmit({
       topic,
+      content_format: form.contentFormat,
       duration_minutes: form.duration,
       target_book_count: form.books,
       tone: form.tone,
@@ -122,10 +137,15 @@ export function TopicForm({disabled = false, onSubmit}: TopicFormProps) {
         {error ? <p id="topic-error" role="alert" className="mt-2 text-sm text-error">{error}</p> : <p id="topic-hint" className="mt-2 text-xs text-muted">질문형 또는 설명형 주제를 모두 사용할 수 있습니다.</p>}
       </div>
 
-      <div className="mt-6 grid gap-5 sm:grid-cols-2">
+      <div className="mt-6">
+        <SegmentedControl label="콘텐츠 형식" value={form.contentFormat} onChange={setContentFormat} options={[{label: "일반 영상", value: "longform"}, {label: "쇼츠 · 한 권", value: "shorts"}]} />
+        {form.contentFormat === "shorts" ? <div className="shorts-format-note mt-3"><span className="shorts-format-badge">60초</span><div><p className="text-sm font-semibold text-ink">주제에 맞는 책 한 권을 집중 소개합니다</p><p className="mt-1 text-xs leading-5 text-muted">생활형 훅 → 책 공개 → 핵심 통찰 → 한 문장 적용 순서로 구성합니다.</p></div></div> : null}
+      </div>
+
+      {form.contentFormat === "longform" ? <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <SegmentedControl label="영상 길이" value={form.duration} onChange={(value) => patch("duration", value)} options={[{label: "8분", value: 8}, {label: "12분", value: 12}, {label: "20분", value: 20}]} />
         <SegmentedControl label="도서 수" value={form.books} onChange={(value) => patch("books", value)} options={[{label: "2권", value: 2}, {label: "3권", value: 3}, {label: "4권", value: 4}]} />
-      </div>
+      </div> : null}
 
       <section className="preset-card mt-7" aria-labelledby="audience-preset-title">
         <div className="flex items-start gap-3">
@@ -170,7 +190,7 @@ export function TopicForm({disabled = false, onSubmit}: TopicFormProps) {
       </div>
 
       <button type="submit" disabled={disabled} className="primary-button mt-6 w-full sm:w-auto">
-        {disabled ? "리서치 진행 중" : "책과 근거 찾기"}
+        {disabled ? "리서치 진행 중" : form.contentFormat === "shorts" ? "쇼츠용 한 권 찾기" : "책과 근거 찾기"}
         <ArrowRight size={18} aria-hidden="true" />
       </button>
     </form>

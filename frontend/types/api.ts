@@ -1,5 +1,6 @@
 export type ResearchRequest = {
   topic: string;
+  content_format: "longform" | "shorts";
   duration_minutes: number;
   target_book_count: number;
   tone: string;
@@ -60,7 +61,17 @@ export type ValidationJob = JobBase & {
   request: {source_run_id: string};
 };
 
-export type PipelineJob = ResearchJob | OutlineJob | ScriptJob | ValidationJob;
+export type CitationRevisionJobRequest = {
+  source_run_id: string;
+  paragraph_ids: string[];
+};
+
+export type CitationRevisionJob = JobBase & {
+  kind: "citation_revision";
+  request: CitationRevisionJobRequest;
+};
+
+export type PipelineJob = ResearchJob | OutlineJob | ScriptJob | ValidationJob | CitationRevisionJob;
 
 export type LibraryStatus = {
   library_available: boolean;
@@ -104,7 +115,7 @@ export type SelectionArtifact = {
 export type NarrativeSection = {
   section_id: string;
   title: string;
-  narrative_function: "hook" | "problem" | "book_perspective" | "transition" | "tension" | "integration" | "application" | "conclusion";
+  narrative_function: "hook" | "problem" | "book_intro" | "book_perspective" | "transition" | "tension" | "integration" | "application" | "conclusion";
   purpose: string;
   key_points: string[];
   book_ids: string[];

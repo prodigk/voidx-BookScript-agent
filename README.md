@@ -210,6 +210,8 @@ uv run python scripts/run_research.py \
 
 CLI에서는 `uv run python -m app.cli research --topic "주제" --books 3`으로 실행합니다. `--lens`, `--emotional-effect`, `--exclude-lens`는 주제별로 반복 지정할 수 있습니다. 모든 요청에는 커리어·생산성·조직관리·성과 중심 제외 정책이 적용되며, 검색 후보 20권을 인문·철학·심리학 편집 방향과 정서 적합성으로 심사한 뒤 최종 후보 10권을 확정합니다. 처리 순서는 `주제 분석 → 검색어 확장 → 하이브리드 검색 → 책 단위 랭킹 → 편집 적합성 심사 → 근거 큐레이션 → 최종 도서 선택`입니다. 검색된 제한 청크만 Responses API에 전달하며, 허용되지 않은 book ID와 chunk ID는 제거합니다. 근거가 부족하면 `insufficient_evidence`로 종료합니다.
 
+한 권 쇼츠는 `uv run python -m app.cli research --topic "불안할 때 읽을 한 권" --format shorts`로 시작합니다. 쇼츠 요청은 60초·1권으로 고정되고, 이후 단계에서 `생활형 훅 → 책 공개 → 핵심 통찰 → 한 문장 적용·여운`의 정확히 4개 섹션을 생성합니다. 상세 기획과 제약은 [한 권 쇼츠 시나리오](docs/shorts-one-book.md)를 참고하세요.
+
 각 실행은 `outputs/<run-id>/`에 `input.json`, `topic_analysis.json`, `search_results.json`, `candidate_screening.json`, `candidate_books.json`, `evidence.json`, `selected_books.json`, `research.md`로 저장되며 이전 실행을 덮어쓰지 않습니다. 심사 파일에는 포함 여부, 주제·편집·정서 점수와 제외 사유가 기록됩니다.
 
 ## Phase 5 내러티브와 영상 구성안
@@ -243,7 +245,7 @@ uv run python scripts/generate_script.py --run-id "<run-id>" --revision
 - `script_with_sources.md`: 문단 유형, 책·근거·청크 ID와 Remotion 장면 타임코드를 포함한 내부 검증용 대본
 - `script.md`: 출처와 렌더링 마커를 제거한 내레이션용 대본
 
-대본 생성에는 구성안에 실제로 연결된 source chunk만 전달합니다. 본문에서는 책 제목과 저자를 말하지 않고, 결말 마지막에 참고 도서 전체를 한 번에 소개합니다. 원문과 정확히 일치하는 짧은 인용 화면은 최대 2개만 허용하며 책 제목과 원본 위치는 화면 출처로 표시합니다. 모델이 인용 장면을 누락하면 로컬 원문 대조를 통과한 문장 하나만 결정적으로 보완하며, 일치 후보가 없으면 인용으로 만들지 않습니다. 섹션 순서와 길이, 책·근거 귀속, 목표 분량을 검사하며, 모델이 다른 섹션의 evidence ID를 잘못 연결하면 오류 문단과 허용 근거만 피드백해 제한된 횟수로 전체 대본을 다시 생성합니다. 검증을 통과한 뒤에만 두 파일을 저장하며 기존 결과는 덮어쓰지 않습니다.
+대본 생성에는 구성안에 실제로 연결된 source chunk만 전달합니다. 일반 영상 본문에서는 책 제목과 저자를 말하지 않고 결말 마지막에 참고 도서를 일괄 소개합니다. 쇼츠는 두 번째 `book_intro` 섹션에서만 `『책 제목』`과 저자를 한 번 말합니다. 원문과 정확히 일치하는 짧은 인용 화면은 일반 영상 최대 2개, 쇼츠 최대 1개만 허용하며 책 제목과 원본 위치는 화면 출처로 표시합니다. 모델이 인용 장면을 누락하면 로컬 원문 대조를 통과한 문장 하나만 결정적으로 보완하며, 일치 후보가 없으면 인용으로 만들지 않습니다. 섹션 순서와 길이, 책·근거 귀속, 목표 분량을 검사하며, 모델이 다른 섹션의 evidence ID를 잘못 연결하면 오류 문단과 허용 근거만 피드백해 제한된 횟수로 전체 대본을 다시 생성합니다. 검증을 통과한 뒤에만 두 파일을 저장하며 기존 결과는 덮어쓰지 않습니다.
 
 ## Remotion 영상 생성 방향
 
@@ -348,17 +350,20 @@ OpenAPI:  http://127.0.0.1:8000/docs
 | POST | `/api/runs/{run_id}/outline-jobs` | 도서 선택 순서를 보존하고 Phase 5 구성안 작업 생성 |
 | POST | `/api/runs/{run_id}/script-jobs` | 구성안 편집 리비전을 보존하고 Phase 6 대본 작업 생성 |
 | POST | `/api/runs/{run_id}/validation-jobs` | Phase 6 대본의 Phase 7 출처 검증 작업 생성 |
+| POST | `/api/runs/{run_id}/citation-revision-jobs` | 선택한 고위험 문단만 새 리비전으로 재작성하고 자동 재검증 |
 | GET | `/api/jobs?limit=50` | 최근 연구·구성안 작업과 상태 목록 |
 | GET | `/api/jobs/{job_id}` | 작업 요청·단계·결과·실패 원인 조회 |
 | GET | `/api/jobs/{job_id}/status` | polling용 작업 상태 조회 |
 
-`POST /api/research-jobs`는 `topic`, `duration_minutes`, `target_book_count`, `tone`, `audience`, `desired_lenses`, `desired_emotional_effects`, `excluded_lenses`를 받습니다. 작업은 SQLite에 보존되며 기본적으로 한 번에 하나만 실행합니다. 서버가 재시작되면 실행 중이던 작업은 `interrupted` 실패로 기록됩니다. `insufficient_evidence`는 실행 오류가 아니라 근거 우선 원칙에 따른 정상 파이프라인 결과입니다.
+`POST /api/research-jobs`는 `topic`, `content_format`, `duration_minutes`, `target_book_count`, `tone`, `audience`, `desired_lenses`, `desired_emotional_effects`, `excluded_lenses`를 받습니다. `content_format=shorts`이면 서버가 60초·1권으로 정규화합니다. 작업은 SQLite에 보존되며 기본적으로 한 번에 하나만 실행합니다. 서버가 재시작되면 실행 중이던 작업은 `interrupted` 실패로 기록됩니다. `insufficient_evidence`는 실행 오류가 아니라 근거 우선 원칙에 따른 정상 파이프라인 결과입니다.
 
-`POST /api/runs/{run_id}/outline-jobs`는 원본 연구 실행 ID와 순서가 있는 `selected_book_ids` 2~4개를 받습니다. 후보 도서 여부와 신뢰도 0.5 이상의 근거를 검사한 뒤 원본 실행을 수정하지 않고 `outputs/<new-run-id>/`에 선택 리비전을 만듭니다. 새 실행에는 `selection_revision.json`으로 원본 실행과 선택 순서를 기록하고, 성공하면 `narrative.json`과 `outline.md`를 추가합니다.
+`POST /api/runs/{run_id}/outline-jobs`는 원본 연구 실행 ID와 순서가 있는 `selected_book_ids`를 받습니다. 일반 영상은 2~4권, 쇼츠는 정확히 1권을 허용합니다. 후보 도서 여부와 신뢰도 0.5 이상의 근거를 검사한 뒤 원본 실행을 수정하지 않고 `outputs/<new-run-id>/`에 선택 리비전을 만듭니다. 새 실행에는 `selection_revision.json`으로 원본 실행과 선택 순서를 기록하고, 성공하면 `narrative.json`과 `outline.md`를 추가합니다.
 
 `POST /api/runs/{run_id}/script-jobs`는 확정 제목과 기존 섹션 ID별 수정 제목·목적·순서를 받습니다. 도입과 결론 위치, 섹션 누락·추가 여부를 검사하고 도서·근거 ID와 시간은 원본 구성안에서 그대로 보존합니다. 새 실행의 `narrative_revision.json`이 편집 출처와 섹션 순서를 기록하며, 성공하면 `script_with_sources.md`와 `script.md`를 생성합니다.
 
 `POST /api/runs/{run_id}/validation-jobs`는 완성된 두 대본 산출물을 확인한 뒤 Phase 7 검증을 수행합니다. 결정적 검사로 청크 해시, 원본 파일, 행 범위, 인용 일치, 책·근거·청크 귀속과 도서 제목을 확인하고 제한된 관련 청크만 의미 검토에 사용합니다. 완료 상태는 `approved` 또는 `needs_revision`이며 `citations.json`과 `validation_report.md`를 같은 실행에 추가합니다.
+
+`POST /api/runs/{run_id}/citation-revision-jobs`는 검증 결과에서 사용자가 선택한 고위험 `unsupported_paraphrase` 또는 `unsupported_causal_claim` 문단만 검토자가 제안한 근거 범위 문장으로 교체합니다. 원본 실행은 유지하고 새 `citation-revision` 실행과 `citation_revision.json`을 만들며, 수정 직후 Phase 7을 자동 재실행합니다. 출처 누락, 행 범위, 인용문 변경이나 귀속 오류처럼 텍스트 교체만으로 안전하게 해결할 수 없는 이슈는 자동 재작성 대상에서 제외합니다.
 
 API는 로컬 절대 경로를 응답하지 않고, 정해진 생성 산출물만 조회할 수 있습니다. 원본 Markdown과 임의 로컬 파일은 제공하지 않습니다. CORS는 `ALLOWED_ORIGINS`에 설정한 frontend origin만 허용합니다. 상세 내용은 [로컬 FastAPI](docs/local-api.md)를 참고하세요.
 
@@ -374,7 +379,7 @@ npm install
 npm run dev
 ```
 
-브라우저에서 `http://localhost:3000`을 엽니다. UI는 라이브러리 상태를 확인하고 주제, 영상 길이, 도서 수, 타겟, 정서적 진입점, 주요 관점, 후반부 확장과 제외 관점을 Phase 4 작업 API로 전달합니다. 작업 상태는 polling하며 완료 후 후보 도서의 검색·주제·편집·정서 점수, 선정 이유와 제안 역할을 표시합니다. 사용자는 2~4권과 내러티브 순서를 확정해 Phase 5 구성안을 생성하고, 제목·중간 섹션 순서·섹션 제목과 목적을 수정한 뒤 Phase 6 대본을 생성할 수 있습니다. 생성된 대본은 내부 출처 표시를 켜고 끌 수 있으며 Phase 7 검증 결과에서 승인 여부, 심각도별 이슈, 문단별 신뢰도와 원본 파일·행 범위를 확인하고 대본·검증 산출물을 내려받을 수 있습니다.
+브라우저에서 `http://localhost:3000`을 엽니다. UI는 일반 영상과 `쇼츠 · 한 권` 형식을 제공하고, 라이브러리 상태를 확인한 뒤 주제, 영상 길이, 도서 수, 타겟, 정서적 진입점, 주요 관점, 후반부 확장과 제외 관점을 Phase 4 작업 API로 전달합니다. 쇼츠를 선택하면 길이와 책 수를 60초·1권으로 고정하며 후보를 바꾸면 새 한 권으로 교체합니다. 작업 상태는 polling하며 완료 후 후보 도서의 검색·주제·편집·정서 점수, 선정 이유와 제안 역할을 표시합니다. 일반 영상은 2~4권과 내러티브 순서를, 쇼츠는 한 권을 확정해 Phase 5 구성안을 생성하고, 제목·중간 섹션 순서·섹션 제목과 목적을 수정한 뒤 Phase 6 대본을 생성할 수 있습니다. 생성된 대본은 내부 출처 표시를 켜고 끌 수 있으며 Phase 7 검증 결과에서 승인 여부, 심각도별 이슈, 문단별 신뢰도와 원본 파일·행 범위를 확인할 수 있습니다. 지원되지 않는 요약·인과관계 고위험 문단은 체크박스로 선택해 해당 문단만 새 리비전으로 재작성하고 자동 재검증할 수 있으며 대본·검증 산출물을 내려받을 수 있습니다.
 
 인문 탐구 프리셋은 적용될 값을 먼저 보여주고 명시적으로 적용합니다. 인문학·철학·심리학을 중심으로 자기이해, 관계, 감정, 삶의 의미와 일상 성찰을 연결하며 커리어 계열 기본 제외 관점을 함께 표시합니다.
 
@@ -469,10 +474,10 @@ uv run pytest
 - Remotion은 내레이션 음성과 프레임 기반 장면을 지원하지만 문장 단위 자막 타이밍과 실제 사진·영상 자산은 아직 연결하지 않았습니다.
 - Phase 7 의미 검증은 모델 판정도 포함하므로 경계 사례는 사람이 `validation_report.md`와 원문을 함께 검토해야 합니다.
 - Insight 기반 주제 후보는 편집 적합성 기준이며 실제 라이브러리 근거 충분성은 Phase 4 검색 전에는 보장하지 않습니다.
-- FastAPI 작업 실행은 현재 Phase 4 연구, Phase 5 구성안, Phase 6 대본과 Phase 7 검증까지 지원합니다. 작업 취소·재시도와 부분 수정 작업은 후속 단계입니다.
+- FastAPI 작업 실행은 Phase 4 연구, Phase 5 구성안, Phase 6 대본, Phase 7 검증과 선택 문단 부분 리비전·자동 재검증까지 지원합니다. 작업 취소와 일반 작업 재시도는 후속 단계입니다.
 - 연구 작업은 로컬 단일 프로세스의 FastAPI `BackgroundTasks`로 실행합니다. 서버 종료 후 자동 재개하지 않으며 중단 상태를 명시적으로 기록합니다.
 - 구성안 편집은 제목, 섹션 제목·목적, 중간 섹션 순서만 지원합니다. 근거 안전성을 위해 시간·도서·근거 연결과 도입·결론 위치는 잠겨 있습니다.
-- 검증 이슈와 원본 위치는 UI에서 확인할 수 있지만 문제가 있는 문단만 안전하게 재작성하고 재검증하는 기능은 아직 연결되지 않았습니다.
+- 부분 재작성은 검토자가 근거 범위의 대체 문장을 제안한 `unsupported_paraphrase`, `unsupported_causal_claim` 고위험 이슈만 지원합니다. 출처·행 범위·인용·귀속 오류는 인덱스나 마커 수정이 필요하므로 UI에서 자동 교체하지 않습니다.
 - 로컬 Mac이 꺼져 있거나 잠자기·네트워크 단절 상태이면 Vercel 프록시는 503을 반환합니다.
 
 ## UI 방향 옵션

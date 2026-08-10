@@ -30,18 +30,26 @@ def resolve_run_dir(output_root: Path, run_id: str) -> Path:
     return run_dir
 
 
-def _normalize_duration(plan: NarrativePlan, target_seconds: int) -> NarrativePlan:
+def _normalize_duration(
+    plan: NarrativePlan,
+    target_seconds: int,
+    *,
+    min_section_seconds: int = 15,
+) -> NarrativePlan:
     current = sum(section.estimated_seconds for section in plan.sections)
     if current <= 0:
         raise ValueError("Narrative duration must be positive")
-    scaled = [max(15, round(section.estimated_seconds * target_seconds / current)) for section in plan.sections]
+    scaled = [
+        max(min_section_seconds, round(section.estimated_seconds * target_seconds / current))
+        for section in plan.sections
+    ]
     difference = target_seconds - sum(scaled)
     order = sorted(range(len(scaled)), key=lambda index: scaled[index], reverse=True)
     while difference != 0:
         changed = False
         for index in order:
             step = 1 if difference > 0 else -1
-            if scaled[index] + step < 15:
+            if scaled[index] + step < min_section_seconds:
                 continue
             scaled[index] += step
             difference -= step
@@ -58,6 +66,7 @@ def _validate_plan(
     plan: NarrativePlan,
     selected: BookSelection,
     evidence: list[EvidenceItem],
+    request: TopicRequest,
 ) -> None:
     selected_ids = {item.book_id for item in selected.selected_books}
     evidence_by_id = {item.evidence_id: item for item in evidence}
@@ -67,6 +76,17 @@ def _validate_plan(
         raise ValueError("Narrative must contain hook and conclusion sections")
     if len({section.section_id for section in plan.sections}) != len(plan.sections):
         raise ValueError("Narrative section IDs must be unique")
+    if request.content_format == "shorts":
+        if len(selected.selected_books) != 1 or len(plan.sections) != 4:
+            raise ValueError("Shorts narrative must use one book and exactly four sections")
+        if plan.sections[0].narrative_function != "hook":
+            raise ValueError("Shorts narrative must start with a hook")
+        if plan.sections[1].narrative_function != "book_intro":
+            raise ValueError("Shorts narrative must introduce the selected book second")
+        if plan.sections[-1].narrative_function != "conclusion":
+            raise ValueError("Shorts narrative must end with a conclusion")
+    elif len(selected.selected_books) < 2 or len(plan.sections) < 5:
+        raise ValueError("Longform narrative must use at least two books and five sections")
     for section in plan.sections:
         if not set(section.book_ids) <= selected_ids:
             raise ValueError(f"Unknown book ID in section: {section.section_id}")
@@ -93,7 +113,9 @@ def render_outline_markdown(
     selected_roles = {item.book_id: item for item in selected.selected_books}
     lines = [
         "# 영상 구성안", "", "## 기본 정보",
-        f"- 주제: {request.topic}", f"- 예상 길이: {plan.total_seconds // 60}분 {plan.total_seconds % 60}초",
+        f"- 주제: {request.topic}",
+        f"- 형식: {'쇼츠' if request.content_format == 'shorts' else '일반 영상'}",
+        f"- 예상 길이: {plan.total_seconds // 60}분 {plan.total_seconds % 60}초",
         f"- 대상: {request.audience}", f"- 톤: {request.tone}", "", "## 핵심 질문", analysis.core_question,
         "", "## 중심 메시지", plan.core_message,
         "", "## 확정 제목", plan.selected_title or "미확정",
@@ -162,8 +184,12 @@ def generate_narrative(
         stage="narrative_architecture", instructions=load_prompt("narrative_architect"),
         input_text=json.dumps(context, ensure_ascii=False), output_type=NarrativePlan,
     )
-    plan = _normalize_duration(plan, request.duration_minutes * 60)
-    _validate_plan(plan, selected, relevant_evidence)
+    plan = _normalize_duration(
+        plan,
+        request.duration_minutes * 60,
+        min_section_seconds=5 if request.content_format == "shorts" else 15,
+    )
+    _validate_plan(plan, selected, relevant_evidence, request)
     narrative_path.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
     outline_path.write_text(render_outline_markdown(request, analysis, plan, selected, candidates), encoding="utf-8")
     return plan

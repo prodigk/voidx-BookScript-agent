@@ -36,12 +36,12 @@ class ScriptParagraph(BaseModel):
 class ScriptSection(BaseModel):
     section_id: str = Field(pattern=r"^[a-z0-9_-]+$")
     title: Annotated[str, Field(min_length=1, max_length=120)]
-    estimated_seconds: int = Field(ge=15, le=600)
+    estimated_seconds: int = Field(ge=5, le=600)
     remotion_cue: RemotionCue
     paragraphs: list[ScriptParagraph] = Field(min_length=1, max_length=12)
 
 
 class ScriptDocument(BaseModel):
     title: Annotated[str, Field(min_length=1, max_length=120)]
-    target_duration_seconds: int = Field(ge=180, le=3600)
-    sections: list[ScriptSection] = Field(min_length=5, max_length=14)
+    target_duration_seconds: int = Field(ge=60, le=3600)
+    sections: list[ScriptSection] = Field(min_length=4, max_length=14)

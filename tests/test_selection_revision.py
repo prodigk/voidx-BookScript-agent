@@ -65,3 +65,31 @@ def test_rejects_selection_without_reliable_evidence(tmp_path: Path) -> None:
     request = OutlineJobRequest(source_run_id="source_run", selected_book_ids=["a", "c"])
     with pytest.raises(ValueError, match="신뢰도 0.5"):
         validate_outline_request(settings, request)
+
+
+def test_shorts_selection_revision_accepts_exactly_one_book(tmp_path: Path) -> None:
+    settings, source = _settings(tmp_path)
+    input_payload = json.loads((source / "input.json").read_text(encoding="utf-8"))
+    input_payload["content_format"] = "shorts"
+    _write(source / "input.json", input_payload)
+
+    run_id = prepare_selection_revision(
+        settings, OutlineJobRequest(source_run_id="source_run", selected_book_ids=["a"]),
+    )
+    revised = settings.project.output_path / run_id
+    selection = json.loads((revised / "selected_books.json").read_text(encoding="utf-8"))
+
+    assert [item["book_id"] for item in selection["selected_books"]] == ["a"]
+    assert "한 권의 책을 소개한다" in selection["cross_book_connection"]
+
+
+def test_shorts_selection_revision_rejects_multiple_books(tmp_path: Path) -> None:
+    settings, source = _settings(tmp_path)
+    input_payload = json.loads((source / "input.json").read_text(encoding="utf-8"))
+    input_payload["content_format"] = "shorts"
+    _write(source / "input.json", input_payload)
+
+    with pytest.raises(ValueError, match="1권만"):
+        validate_outline_request(
+            settings, OutlineJobRequest(source_run_id="source_run", selected_book_ids=["a", "b"]),
+        )

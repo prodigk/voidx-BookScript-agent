@@ -46,10 +46,17 @@ def _source_artifact(settings: Settings, run_id: str, name: str) -> Path:
 
 def validate_outline_request(settings: Settings, request: OutlineJobRequest) -> None:
     """Validate candidate membership and minimum supporting evidence before queueing."""
+    input_path = _source_artifact(settings, request.source_run_id, "input.json")
     candidate_path = _source_artifact(settings, request.source_run_id, "candidate_books.json")
     evidence_path = _source_artifact(settings, request.source_run_id, "evidence.json")
     candidates = [CandidateBook.model_validate(item) for item in _read_json(candidate_path)]
     evidence = [EvidenceItem.model_validate(item) for item in _read_json(evidence_path)]
+    topic_request = TopicRequest.model_validate(_read_json(input_path))
+    expected_count = 1 if topic_request.content_format == "shorts" else None
+    if expected_count is not None and len(request.selected_book_ids) != expected_count:
+        raise ValueError("쇼츠 구성안은 근거 도서 1권만 선택할 수 있습니다.")
+    if topic_request.content_format == "longform" and len(request.selected_book_ids) < 2:
+        raise ValueError("일반 영상 구성안은 근거 도서 2권 이상이 필요합니다.")
     candidate_ids = {candidate.book_id for candidate in candidates}
     unknown = [book_id for book_id in request.selected_book_ids if book_id not in candidate_ids]
     if unknown:
@@ -129,7 +136,9 @@ def prepare_selection_revision(settings: Settings, request: OutlineJobRequest) -
         selected_books=selected,
         excluded_books=excluded,
         cross_book_connection=(
-            "사용자가 지정한 순서에 따라 " + " → ".join(titles) + "의 관점을 연결한다."
+            f"{titles[0]}의 핵심 관점을 주제와 연결해 한 권의 책을 소개한다."
+            if len(titles) == 1
+            else "사용자가 지정한 순서에 따라 " + " → ".join(titles) + "의 관점을 연결한다."
         ),
     )
 

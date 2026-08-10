@@ -56,4 +56,23 @@ describe("TopicForm", () => {
       desired_lenses: ["인문학", "철학", "심리학", "윤리", "자기이해", "가치 탐색"],
     }));
   });
+
+  it("submits the one-book 60-second shorts format", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(<TopicForm onSubmit={onSubmit} />);
+
+    await user.click(screen.getByRole("button", {name: "쇼츠 · 한 권"}));
+    await user.type(screen.getByLabelText("영상 주제"), "불안할 때 읽을 한 권");
+
+    expect(screen.getByText("생활형 훅 → 책 공개 → 핵심 통찰 → 한 문장 적용 순서로 구성합니다.")).toBeInTheDocument();
+    expect(screen.queryByRole("group", {name: "영상 길이"})).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "쇼츠용 한 권 찾기"}));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      content_format: "shorts",
+      duration_minutes: 1,
+      target_book_count: 1,
+    }));
+  });
 });

@@ -15,8 +15,8 @@
 - 각 구성안 섹션에 지정된 evidence_id를 해당 섹션 대본에서 모두 한 번 이상 사용한다.
 - section_evidence_contract를 절대적인 귀속 규칙으로 사용한다. 한 섹션의 문단에는 그 섹션의 allowed_book_ids와 required_evidence_ids에 포함된 ID만 연결한다.
 - 입력에 없는 book_id, evidence_id, 사실, 사례를 책의 주장처럼 만들지 않는다.
-- 내레이션 본문에서는 책 제목과 저자를 말하지 않는다. 내용이 책 소개처럼 끊기지 않고 하나의 이야기로 이어져야 한다.
-- 참고한 책 전체의 제목은 시스템이 결말 마지막에 별도로 추가하므로 대본 문단에 작성하지 않는다.
+- 일반 영상(`content_format=longform`)의 내레이션 본문에서는 책 제목과 저자를 말하지 않는다. 내용이 책 소개처럼 끊기지 않고 하나의 이야기로 이어져야 한다.
+- 일반 영상에서 참고한 책 전체의 제목은 시스템이 결말 마지막에 별도로 추가하므로 대본 문단에 작성하지 않는다.
 - verified_quote_candidates가 있으면 본문 소단락 중 1개 또는 2개에만 quote_card를 하나씩 배치한다. 반드시 그 목록의 evidence만 사용한다. 목록이 비어 있으면 quote_card를 만들지 않고 모든 quotation evidence를 요약으로만 사용한다.
 - quote_card의 quote_text와 quotation 문단은 source chunk의 문구를 글자 그대로 사용한다. Markdown의 굵게 표시 기호만 생략할 수 있다.
 - quotation 문단에는 설명이나 출처명을 덧붙이지 않는다. book_id와 quote_evidence_id 하나만 정확히 연결한다.
@@ -27,6 +27,15 @@
 - editorial_strategy가 있으면 hook_strategy, narrative_strategy, tone_rules, closing_strategy를 문체와 흐름에 적용한다.
 - insight는 편집 방향일 뿐 책의 사실 근거가 아니므로 insight 내용을 저자나 책의 주장처럼 말하지 않는다.
 - validation_feedback이 있으면 이전 응답이 로컬 검증을 통과하지 못한 것이다. error와 invalid_section을 확인하고 allowed_section_evidence 안에서 귀속을 바로잡은 전체 ScriptDocument를 다시 작성한다.
+
+쇼츠 원칙 (`request.content_format=shorts`):
+- 입력의 정확히 4개 섹션과 60초 길이를 유지한다.
+- 첫 문장은 인사나 채널 소개 없이 생활형 질문 또는 짧은 상황으로 시작한다.
+- `book_intro` 섹션에서만 선택 도서 제목을 `『책 제목』` 형식으로, 저자를 정확히 한 번 소개한다.
+- 일반 영상과 달리 시스템이 마지막 참고 도서 문장을 덧붙이지 않으므로 책 소개를 누락하지 않는다.
+- 한 권의 핵심 통찰 하나만 설명하고 근거가 다른 주장들을 압축 나열하지 않는다.
+- 한 문장은 짧게 쓰고, 화면 텍스트는 한 번에 이해할 수 있는 문구로 제한한다.
+- quote_card는 검증 후보가 있을 때 최대 1개만 사용한다.
 
 Remotion 준비 원칙:
 - 각 섹션에 하나의 remotion_cue를 작성한다.

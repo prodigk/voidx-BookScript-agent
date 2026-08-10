@@ -35,4 +35,18 @@ describe("ResearchResult", () => {
     await user.click(screen.getByRole("button", {name: /선택 확정/}));
     expect(onGenerateOutline).toHaveBeenCalledWith(["book-2", "book-1", "book-3"]);
   });
+
+  it("keeps exactly one selected book for shorts", async () => {
+    const user = userEvent.setup();
+    const onGenerateOutline = vi.fn().mockResolvedValue(undefined);
+    render(<ResearchResult candidates={candidates} selection={selection} contentFormat="shorts" onGenerateOutline={onGenerateOutline} />);
+
+    await user.click(screen.getByRole("button", {name: "회복의 기술 선택"}));
+
+    expect(screen.getByText("1", {selector: "strong"}).parentElement).toHaveTextContent("1 / 1권 선택");
+    expect(screen.getByRole("button", {name: "회복의 기술 선택 해제"})).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", {name: "행복론 선택"})).toHaveAttribute("aria-pressed", "false");
+    await user.click(screen.getByRole("button", {name: /한 권 확정/}));
+    expect(onGenerateOutline).toHaveBeenCalledWith(["book-3"]);
+  });
 });

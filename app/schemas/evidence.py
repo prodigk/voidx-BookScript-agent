@@ -72,7 +72,7 @@ class ExcludedBook(BaseModel):
 
 
 class BookSelection(BaseModel):
-    selected_books: list[SelectedBook] = Field(min_length=2, max_length=4)
+    selected_books: list[SelectedBook] = Field(min_length=1, max_length=4)
     excluded_books: list[ExcludedBook] = Field(default_factory=list)
     cross_book_connection: ConciseText
 

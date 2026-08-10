@@ -203,8 +203,9 @@ def hybrid_search_command(
 @app.command("research")
 def research_command(
     topic: str = typer.Option(..., "--topic"),
-    duration: int = typer.Option(12, "--duration", min=3, max=60),
-    books: int = typer.Option(3, "--books", min=2, max=4),
+    content_format: str = typer.Option("longform", "--format", help="longform 또는 shorts"),
+    duration: int = typer.Option(12, "--duration", min=1, max=60),
+    books: int = typer.Option(3, "--books", min=1, max=4),
     tone: str = typer.Option("사색적", "--tone"),
     audience: str = typer.Option("일반 성인", "--audience"),
     lens: list[str] = typer.Option(None, "--lens", help="원하는 관점(반복 지정 가능)"),
@@ -218,7 +219,8 @@ def research_command(
     result = run_phase4(
         settings,
         TopicRequest(
-            topic=topic, duration_minutes=duration, target_book_count=books, tone=tone, audience=audience,
+            topic=topic, content_format=content_format, duration_minutes=duration,
+            target_book_count=books, tone=tone, audience=audience,
             desired_lenses=lens or [], desired_emotional_effects=emotional_effect or [],
             excluded_lenses=exclude_lens or [],
         ),

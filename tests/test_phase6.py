@@ -120,6 +120,43 @@ class MissingQuoteCardProvider(FakeScriptProvider):
         return script.model_copy(update={"sections": sections})
 
 
+class ShortsScriptProvider:
+    def parse(self, *, stage, instructions, input_text, output_type):
+        context = json.loads(input_text)
+        assert context["request"]["content_format"] == "shorts"
+        texts = [
+            "타인의 한마디가 하루 종일 마음에 남아 있나요?",
+            "『책 하나』의 저자 저자 하나는 그 불안을 관계의 신호로 바라봅니다.",
+            "인정받고 싶은 마음은 약함이 아니라 관계를 지키려는 자연스러운 욕구입니다.",
+            "오늘은 타인의 점수 대신 내가 지키고 싶은 기준 하나를 골라보세요.",
+        ]
+        paragraphs = [
+            ("commentary", [], []),
+            ("paraphrase", ["book_1"], ["e_1"]),
+            ("paraphrase", ["book_1"], ["e_1"]),
+            ("commentary", [], []),
+        ]
+        sections = []
+        for index, (section, text, paragraph) in enumerate(
+            zip(context["narrative"]["sections"], texts, paragraphs, strict=True), 1
+        ):
+            text_type, book_ids, evidence_ids = paragraph
+            sections.append({
+                "section_id": section["section_id"],
+                "title": section["title"],
+                "estimated_seconds": section["estimated_seconds"],
+                "remotion_cue": {
+                    "visual_intent": f"세로형 장면 {index}", "scene_type": "standard",
+                    "on_screen_text": [section["title"]], "suggested_assets": ["세로형 책 이미지"],
+                },
+                "paragraphs": [{
+                    "paragraph_id": f"shorts_p_{index}", "text_type": text_type, "text": text,
+                    "book_ids": book_ids, "evidence_ids": evidence_ids,
+                }],
+            })
+        return ScriptDocument(title="타인의 평가가 두려울 때 읽을 한 권", target_duration_seconds=60, sections=sections)
+
+
 def _write_run(tmp_path: Path) -> tuple[Settings, str, list[dict[str, object]]]:
     output_path, run_id = tmp_path / "outputs", "run_001"
     run_dir = output_path / run_id
@@ -172,6 +209,41 @@ def _write_run(tmp_path: Path) -> tuple[Settings, str, list[dict[str, object]]]:
          "source_file": "책2.md", "start_line": 20, "end_line": 22},
     ]
     return settings, run_id, chunks
+
+
+def _write_shorts_run(tmp_path: Path) -> tuple[Settings, str, list[dict[str, object]]]:
+    settings, run_id, chunks = _write_run(tmp_path)
+    run_dir = settings.project.output_path / run_id
+    input_payload = json.loads((run_dir / "input.json").read_text(encoding="utf-8"))
+    input_payload.update({"content_format": "shorts", "duration_minutes": 1, "target_book_count": 1})
+    (run_dir / "input.json").write_text(json.dumps(input_payload, ensure_ascii=False), encoding="utf-8")
+    sections = [
+        {"section_id": "hook", "title": "생활형 훅", "narrative_function": "hook", "purpose": "공감",
+         "key_points": ["질문"], "book_ids": [], "evidence_ids": [], "estimated_seconds": 10},
+        {"section_id": "intro", "title": "책 공개", "narrative_function": "book_intro", "purpose": "소개",
+         "key_points": ["책과 저자"], "book_ids": ["book_1"], "evidence_ids": ["e_1"], "estimated_seconds": 15},
+        {"section_id": "insight", "title": "핵심 통찰", "narrative_function": "book_perspective", "purpose": "이해",
+         "key_points": ["관계 욕구"], "book_ids": ["book_1"], "evidence_ids": ["e_1"], "estimated_seconds": 25},
+        {"section_id": "end", "title": "한 문장 적용", "narrative_function": "conclusion", "purpose": "여운",
+         "key_points": ["내 기준"], "book_ids": [], "evidence_ids": [], "estimated_seconds": 10},
+    ]
+    narrative = {
+        "title_candidates": ["제목1", "제목2", "제목3"], "core_message": "평가는 판결문이 아니다.",
+        "emotional_arc": ["공감", "발견", "이해", "여운"], "sections": sections, "total_seconds": 60,
+    }
+    (run_dir / "narrative.json").write_text(json.dumps(narrative, ensure_ascii=False), encoding="utf-8")
+    selection = {
+        "selected_books": [{"book_id": "book_1", "role": "핵심 통찰", "selection_reason": "근거"}],
+        "excluded_books": [{"book_id": "book_2", "reason": "한 권 쇼츠"}],
+        "cross_book_connection": "책 하나를 주제와 연결한다.",
+    }
+    (run_dir / "selected_books.json").write_text(json.dumps(selection, ensure_ascii=False), encoding="utf-8")
+    evidence = [{
+        "evidence_id": "e_1", "book_id": "book_1", "type": "paraphrase", "claim": "관계 욕구가 있다.",
+        "source_chunk_ids": ["chunk_1"], "confidence": 0.9,
+    }]
+    (run_dir / "evidence.json").write_text(json.dumps(evidence, ensure_ascii=False), encoding="utf-8")
+    return settings, run_id, chunks[:1]
 
 
 def test_generate_script_writes_internal_and_clean_outputs(tmp_path: Path) -> None:
@@ -280,3 +352,15 @@ def test_script_revision_does_not_copy_downstream_validation_artifacts(tmp_path:
     assert (revision / "input.json").is_file()
     for name in ("script.md", "script_with_sources.md", "citations.json", "validation_report.md"):
         assert not (revision / name).exists()
+
+
+def test_generate_shorts_script_names_one_book_in_intro_without_footer(tmp_path: Path) -> None:
+    settings, run_id, chunks = _write_shorts_run(tmp_path)
+    script = generate_script(settings, run_id, structured=ShortsScriptProvider(), source_chunks=chunks)
+
+    assert len(script.sections) == 4
+    assert script.target_duration_seconds == 60
+    clean = (settings.project.output_path / run_id / "script.md").read_text(encoding="utf-8")
+    assert "『책 하나』의 저자 저자 하나" in clean
+    assert clean.count("책 하나") == 1
+    assert "이 영상은" not in clean

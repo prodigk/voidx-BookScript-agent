@@ -1,6 +1,6 @@
 """Phase 4 topic planning schemas."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -13,8 +13,9 @@ DEFAULT_EXCLUDED_LENSES = ("커리어", "생산성", "조직관리", "성과 중
 
 class TopicRequest(BaseModel):
     topic: str = Field(min_length=2, max_length=500)
-    duration_minutes: int = Field(default=12, ge=3, le=60)
-    target_book_count: int = Field(default=3, ge=2, le=4)
+    content_format: Literal["longform", "shorts"] = "longform"
+    duration_minutes: int = Field(default=12, ge=1, le=60)
+    target_book_count: int = Field(default=3, ge=1, le=4)
     tone: str = Field(default="사색적")
     audience: str = Field(default="일반 성인")
     desired_lenses: list[str] = Field(default_factory=list, max_length=8)
@@ -24,6 +25,11 @@ class TopicRequest(BaseModel):
     @model_validator(mode="after")
     def apply_editorial_focus(self) -> "TopicRequest":
         """Keep new research runs centered on humanities, philosophy, and psychology."""
+        if self.content_format == "shorts":
+            self.duration_minutes = 1
+            self.target_book_count = 1
+        elif self.duration_minutes < 3 or self.target_book_count < 2:
+            raise ValueError("longform requires at least 3 minutes and 2 books")
         blocked = set(DEFAULT_EXCLUDED_LENSES)
         desired = list(dict.fromkeys(
             lens for lens in self.desired_lenses if lens not in blocked

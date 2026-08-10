@@ -9,6 +9,7 @@ type ResearchResultProps = {
   candidates: CandidateBook[];
   selection: SelectionArtifact;
   busy?: boolean;
+  contentFormat?: "longform" | "shorts";
   onGenerateOutline: (selectedBookIds: string[]) => Promise<void>;
 };
 
@@ -17,17 +18,22 @@ function cleanAuthor(author: string) {
   return author.replace(/^\['|']$/g, "").replace(/', '/g, ", ");
 }
 
-export function ResearchResult({candidates, selection, busy = false, onGenerateOutline}: ResearchResultProps) {
+export function ResearchResult({candidates, selection, busy = false, contentFormat = "longform", onGenerateOutline}: ResearchResultProps) {
   const initial = selection.selected_books.map((book) => book.book_id);
   const [selectedIds, setSelectedIds] = useState(initial);
   const [expanded, setExpanded] = useState<string | null>(initial[0] ?? null);
+  const singleBook = contentFormat === "shorts";
+  const minimumBooks = singleBook ? 1 : 2;
+  const maximumBooks = singleBook ? 1 : 4;
   const selectedMap = useMemo(
     () => new Map(selection.selected_books.map((book) => [book.book_id, book])),
     [selection.selected_books],
   );
 
   const toggle = (bookId: string) => {
-    setSelectedIds((current) => current.includes(bookId) ? current.filter((id) => id !== bookId) : current.length < 4 ? [...current, bookId] : current);
+    setSelectedIds((current) => current.includes(bookId)
+      ? current.filter((id) => id !== bookId)
+      : singleBook ? [bookId] : current.length < maximumBooks ? [...current, bookId] : current);
   };
 
   const move = (bookId: string, direction: -1 | 1) => {
@@ -51,11 +57,11 @@ export function ResearchResult({candidates, selection, busy = false, onGenerateO
           <h2 id="candidate-title" className="mt-2 text-[22px] font-semibold tracking-[-0.02em] text-ink">후보 도서 {candidates.length}권</h2>
           <p className="mt-2 text-sm leading-6 text-muted">점수만 보지 않고 각 책이 영상에서 맡을 관점과 선정 이유를 확인하세요.</p>
         </div>
-        <div className="selection-count" aria-live="polite"><strong>{selectedIds.length}</strong> / 4권 선택</div>
+        <div className="selection-count" aria-live="polite"><strong>{selectedIds.length}</strong> / {maximumBooks}권 선택</div>
       </div>
 
       <div className="connection-note mt-6">
-        <p className="eyebrow">책을 잇는 흐름</p>
+        <p className="eyebrow">{singleBook ? "한 권 소개 방향" : "책을 잇는 흐름"}</p>
         <p className="mt-2 text-sm leading-6 text-ink">{selection.cross_book_connection}</p>
       </div>
 
@@ -63,9 +69,9 @@ export function ResearchResult({candidates, selection, busy = false, onGenerateO
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="eyebrow">Narrative stack</p>
-            <h3 id="narrative-stack-title" className="mt-2 font-semibold text-ink">영상에서 만날 순서</h3>
+            <h3 id="narrative-stack-title" className="mt-2 font-semibold text-ink">{singleBook ? "쇼츠에서 소개할 책" : "영상에서 만날 순서"}</h3>
           </div>
-          <p className="text-xs text-muted">화살표로 이야기의 흐름을 조정하세요</p>
+          <p className="text-xs text-muted">{singleBook ? "한 권의 핵심 통찰에 집중합니다" : "화살표로 이야기의 흐름을 조정하세요"}</p>
         </div>
         <ol className="mt-4 grid gap-2">
           {selectedCandidates.map((book, index) => (
@@ -76,8 +82,7 @@ export function ResearchResult({candidates, selection, busy = false, onGenerateO
                 <p className="mt-0.5 truncate text-xs text-muted">{book.perspective ?? selectedMap.get(book.book_id)?.role ?? "핵심 관점"}</p>
               </div>
               <div className="flex gap-1">
-                <button type="button" className="order-button" disabled={index === 0 || busy} onClick={() => move(book.book_id, -1)} aria-label={`${book.title} 순서를 위로`}><ArrowUp size={15} /></button>
-                <button type="button" className="order-button" disabled={index === selectedCandidates.length - 1 || busy} onClick={() => move(book.book_id, 1)} aria-label={`${book.title} 순서를 아래로`}><ArrowDown size={15} /></button>
+                {!singleBook ? <><button type="button" className="order-button" disabled={index === 0 || busy} onClick={() => move(book.book_id, -1)} aria-label={`${book.title} 순서를 위로`}><ArrowUp size={15} /></button><button type="button" className="order-button" disabled={index === selectedCandidates.length - 1 || busy} onClick={() => move(book.book_id, 1)} aria-label={`${book.title} 순서를 아래로`}><ArrowDown size={15} /></button></> : null}
               </div>
             </li>
           ))}
@@ -134,10 +139,10 @@ export function ResearchResult({candidates, selection, busy = false, onGenerateO
       <div className="mt-6 flex flex-col gap-4 rounded-[14px] bg-surface-soft p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3 text-sm leading-6 text-muted">
           <BookOpen size={18} className="mt-0.5 shrink-0 text-ink" aria-hidden="true" />
-          <p>{selectedIds.length < 2 ? "구성안을 만들려면 근거가 있는 책을 2권 이상 선택하세요." : "확정하면 이 순서를 보존한 새 실행 기록에서 구성안을 만듭니다."}</p>
+          <p>{selectedIds.length < minimumBooks ? `구성안을 만들려면 근거가 있는 책을 ${minimumBooks}권 선택하세요.` : singleBook ? "확정하면 이 책의 핵심 근거만 사용해 60초 쇼츠 시나리오를 만듭니다." : "확정하면 이 순서를 보존한 새 실행 기록에서 구성안을 만듭니다."}</p>
         </div>
-        <button type="button" disabled={busy || selectedIds.length < 2} className="primary-button shrink-0" onClick={() => void onGenerateOutline(selectedIds)}>
-          <Sparkles size={17} aria-hidden="true" />{busy ? "구성안 생성 중" : "선택 확정 · 구성안 만들기"}
+        <button type="button" disabled={busy || selectedIds.length < minimumBooks} className="primary-button shrink-0" onClick={() => void onGenerateOutline(selectedIds)}>
+          <Sparkles size={17} aria-hidden="true" />{busy ? "구성안 생성 중" : singleBook ? "한 권 확정 · 쇼츠 구성안" : "선택 확정 · 구성안 만들기"}
         </button>
       </div>
     </section>

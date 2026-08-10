@@ -75,7 +75,7 @@ class ResearchJobResponse(BaseModel):
 
 
 class SelectionRequest(BaseModel):
-    selected_book_ids: list[str] = Field(min_length=2, max_length=4)
+    selected_book_ids: list[str] = Field(min_length=1, max_length=4)
 
     @model_validator(mode="after")
     def selected_books_are_unique(self) -> "SelectionRequest":
@@ -111,7 +111,7 @@ class NarrativeSectionRevision(BaseModel):
 class ScriptJobRequest(BaseModel):
     source_run_id: str = Field(min_length=1, max_length=255)
     selected_title: str = Field(min_length=1, max_length=120)
-    sections: list[NarrativeSectionRevision] = Field(min_length=5, max_length=14)
+    sections: list[NarrativeSectionRevision] = Field(min_length=4, max_length=14)
 
     @model_validator(mode="after")
     def section_ids_are_unique(self) -> "ScriptJobRequest":
@@ -153,7 +153,35 @@ class ValidationJobResponse(BaseModel):
     finished_at: datetime | None = None
 
 
-PipelineJobResponse = ResearchJobResponse | OutlineJobResponse | ScriptJobResponse | ValidationJobResponse
+class CitationRevisionJobRequest(BaseModel):
+    source_run_id: str = Field(min_length=1, max_length=255)
+    paragraph_ids: list[str] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def paragraph_ids_are_unique(self) -> "CitationRevisionJobRequest":
+        if len(set(self.paragraph_ids)) != len(self.paragraph_ids):
+            raise ValueError("paragraph_ids must be unique")
+        return self
+
+
+class CitationRevisionJobResponse(BaseModel):
+    job_id: str
+    kind: Literal["citation_revision"] = "citation_revision"
+    status: JobStatus
+    stage: str
+    request: CitationRevisionJobRequest
+    run_id: str | None = None
+    pipeline_status: str | None = None
+    error: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+PipelineJobResponse = (
+    ResearchJobResponse | OutlineJobResponse | ScriptJobResponse | ValidationJobResponse
+    | CitationRevisionJobResponse
+)
 
 
 class ResearchJobListResponse(BaseModel):

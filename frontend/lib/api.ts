@@ -13,6 +13,7 @@ import type {
   ValidationArtifacts,
   ValidationJob,
   CitationValidationResult,
+  CitationRevisionJob,
 } from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/local";
@@ -86,6 +87,16 @@ export async function getScriptArtifacts(runId: string): Promise<ScriptArtifacts
 export function createValidationJob(sourceRunId: string): Promise<ValidationJob> {
   return request(`/api/runs/${encodeURIComponent(sourceRunId)}/validation-jobs`, {
     method: "POST", body: JSON.stringify({source_run_id: sourceRunId}),
+  });
+}
+
+export function createCitationRevisionJob(
+  sourceRunId: string,
+  paragraphIds: string[],
+): Promise<CitationRevisionJob> {
+  return request(`/api/runs/${encodeURIComponent(sourceRunId)}/citation-revision-jobs`, {
+    method: "POST",
+    body: JSON.stringify({source_run_id: sourceRunId, paragraph_ids: paragraphIds}),
   });
 }
 

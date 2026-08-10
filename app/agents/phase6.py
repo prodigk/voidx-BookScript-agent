@@ -207,6 +207,7 @@ def _validate_script(
     characters_per_minute: int,
     length_tolerance: float,
     quote_card_required: bool,
+    max_quote_scenes: int = 2,
 ) -> None:
     if script.target_duration_seconds != narrative.total_seconds:
         raise ValueError("Script duration does not match narrative duration")
@@ -265,8 +266,8 @@ def _validate_script(
                 raise ValueError(f"Quote card text/source mismatch: {script_section.section_id}")
         elif quote_paragraphs or cue.quote_text or cue.quote_evidence_id or cue.quote_duration_seconds:
             raise ValueError(f"Quotation must use a quote card: {script_section.section_id}")
-    if quote_card_required and not 1 <= quote_scenes <= 2:
-        raise ValueError("Script must contain one or two quote-card scenes")
+    if quote_card_required and not 1 <= quote_scenes <= max_quote_scenes:
+        raise ValueError(f"Script must contain between one and {max_quote_scenes} quote-card scenes")
     if not quote_card_required and quote_scenes:
         raise ValueError("Script cannot contain a quote-card scene without verified quotation evidence")
     text_length = sum(len(paragraph.text) for section in script.sections for paragraph in section.paragraphs)
@@ -316,6 +317,7 @@ def _render_scripts(
     candidates: Sequence[CandidateBook],
     selected: BookSelection,
     source_chunks: Sequence[dict[str, object]],
+    request: TopicRequest,
     *,
     renderer: str,
     fps: int,
@@ -365,14 +367,17 @@ def _render_scripts(
                 markers.append("CHUNK:" + ",".join(chunk_ids))
             sourced += ["[" + "] [".join(markers) + "]", ""]
             clean += [paragraph.text, ""]
-    titles = [_display_title(candidate_by_id[item.book_id].title) for item in selected.selected_books]
-    if len(titles) == 2:
-        title_list = f"『{titles[0]}』와 『{titles[1]}』"
-    else:
-        title_list = ", ".join(f"『{title}』" for title in titles[:-1]) + f", 그리고 『{titles[-1]}』"
-    attribution = f"이 영상은 {title_list}의 내용을 바탕으로 구성되었습니다."
-    sourced += [attribution, "", "[TYPE:commentary]"]
-    clean += [attribution]
+    if request.content_format == "longform":
+        titles = [_display_title(candidate_by_id[item.book_id].title) for item in selected.selected_books]
+        if len(titles) == 1:
+            title_list = f"『{titles[0]}』"
+        elif len(titles) == 2:
+            title_list = f"『{titles[0]}』와 『{titles[1]}』"
+        else:
+            title_list = ", ".join(f"『{title}』" for title in titles[:-1]) + f", 그리고 『{titles[-1]}』"
+        attribution = f"이 영상은 {title_list}의 내용을 바탕으로 구성되었습니다."
+        sourced += [attribution, "", "[TYPE:commentary]"]
+        clean += [attribution]
     return "\n".join(sourced).rstrip() + "\n", "\n".join(clean).rstrip() + "\n"
 
 
@@ -472,12 +477,28 @@ def generate_script(
                 characters_per_minute=settings.script.characters_per_minute,
                 length_tolerance=settings.script.length_tolerance,
                 quote_card_required=bool(verified_quote_candidates),
+                max_quote_scenes=1 if request.content_format == "shorts" else 2,
             )
-            for paragraph in (item for section in script.sections for item in section.paragraphs):
-                if any(name in paragraph.text for name in restricted_names):
-                    raise ValueError(
-                        f"Book title/author exposed before final attribution: {paragraph.paragraph_id}"
-                    )
+            narrative_by_id = {section.section_id: section for section in narrative.sections}
+            intro_text = ""
+            for section in script.sections:
+                narrative_function = narrative_by_id[section.section_id].narrative_function
+                for paragraph in section.paragraphs:
+                    if narrative_function == "book_intro":
+                        intro_text += " " + paragraph.text
+                    if any(name in paragraph.text for name in restricted_names):
+                        if request.content_format != "shorts" or narrative_function != "book_intro":
+                            raise ValueError(
+                                f"Book title/author exposed outside the allowed introduction: {paragraph.paragraph_id}"
+                            )
+            if request.content_format == "shorts":
+                selected_book = selected.selected_books[0]
+                candidate = candidate_by_id[selected_book.book_id]
+                title = _display_title(candidate.title)
+                if title not in intro_text:
+                    raise ValueError("Shorts book introduction must name the selected title")
+                if candidate.author not in {"", "unknown"} and candidate.author not in intro_text:
+                    raise ValueError("Shorts book introduction must name the selected author")
         except ValueError as exc:
             if attempt >= settings.script.max_validation_retries:
                 raise
@@ -492,7 +513,7 @@ def generate_script(
     if script is None:
         raise RuntimeError("Script generation did not produce a document")
     sourced, clean = _render_scripts(
-        script, evidence, candidates, selected, source_chunks,
+        script, evidence, candidates, selected, source_chunks, request,
         renderer=settings.video.primary_renderer, fps=settings.video.fps,
     )
     sourced_path.write_text(sourced, encoding="utf-8")

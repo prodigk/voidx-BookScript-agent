@@ -185,6 +185,8 @@ button:disabled { cursor: not-allowed; }
   .secondary-button.compact { min-height: 38px; padding: 8px 13px; border-radius: 10px; font-size: 13px; }
 
   .preset-card { padding: 16px; border: 1px solid #f6d8de; border-radius: 14px; background: linear-gradient(135deg, #fff8fa, #fff); }
+  .shorts-format-note { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid #f5d1d9; border-radius: 14px; background: linear-gradient(135deg, #fff8fa, #fff); }
+  .shorts-format-badge { display: grid; min-width: 50px; height: 50px; flex: 0 0 auto; place-items: center; border-radius: 999px; color: white; background: var(--color-primary); font-size: 12px; font-weight: 700; }
   .direction-summary { padding: 16px; border-left: 3px solid var(--color-primary); border-radius: 0 12px 12px 0; background: var(--color-surface-soft); }
 
   .research-ribbon { display: grid; grid-template-columns: repeat(3, 1fr); padding: 22px 20px; }
@@ -258,9 +260,12 @@ button:disabled { cursor: not-allowed; }
   .validation-stat[data-tone="review"] { box-shadow: inset 3px 0 #d6a53d; }
   .validation-stat[data-tone="invalid"] { box-shadow: inset 3px 0 var(--color-error); }
   .issue-card { padding: 17px; border: 1px solid #f1d7c8; border-radius: 14px; background: #fffaf7; }
+  .issue-card[data-selected="true"] { border-color: #e997a8; box-shadow: inset 3px 0 var(--color-primary); }
   .issue-card[data-severity="medium"] { border-color: #eadbb4; background: #fffcf4; }
   .issue-card[data-severity="low"] { border-color: var(--color-hairline-soft); background: var(--color-surface-soft); }
   .severity-badge { padding: 3px 7px; border-radius: 999px; color: #9f321b; background: #ffe7df; font-size: 10px; font-weight: 700; }
+  .revision-checkbox { width: 20px; height: 20px; flex: 0 0 auto; margin-top: 2px; accent-color: var(--color-primary); }
+  .revision-action { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px; border: 1px solid #f5d1d9; border-radius: 14px; background: linear-gradient(135deg, #fff8fa, #fff); }
   .citation-detail { overflow: hidden; border: 1px solid var(--color-hairline-soft); border-radius: 12px; background: white; }
   .citation-detail summary { display: flex; min-height: 50px; cursor: pointer; list-style: none; align-items: center; gap: 10px; padding: 11px 13px; color: var(--color-muted); font-size: 12px; font-weight: 600; }
   .citation-detail summary::-webkit-details-marker { display: none; }
@@ -286,6 +291,8 @@ button:disabled { cursor: not-allowed; }
   .script-paper { padding: 18px; }
   .validation-stats { grid-template-columns: 1fr; }
   .validation-hero { padding: 16px; }
+  .revision-action { align-items: stretch; flex-direction: column; }
+  .revision-action .primary-button { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

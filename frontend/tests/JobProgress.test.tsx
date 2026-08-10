@@ -9,7 +9,7 @@ const base: ResearchJob = {
   kind: "research",
   status: "running",
   stage: "phase4_research",
-  request: {topic: "주제", duration_minutes: 12, target_book_count: 3, tone: "사색적", audience: "일반 성인", desired_lenses: ["인문학", "철학", "심리학"], desired_emotional_effects: [], excluded_lenses: ["커리어", "생산성", "조직관리", "성과 중심"]},
+  request: {topic: "주제", content_format: "longform", duration_minutes: 12, target_book_count: 3, tone: "사색적", audience: "일반 성인", desired_lenses: ["인문학", "철학", "심리학"], desired_emotional_effects: [], excluded_lenses: ["커리어", "생산성", "조직관리", "성과 중심"]},
   run_id: null,
   pipeline_status: null,
   error: null,
